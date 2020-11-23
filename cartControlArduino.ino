@@ -18,14 +18,15 @@
 
 bool verbose = false;
 
-int NUM_REPEATED_MEASURES = 6;
-int DELAY_BETWEEN_ANALOG_READS = 2;	// may get overwritten by cart control
-int MIN_MEASURE_CYCLE_DURATION = 70;  // may get overwritten by cart control
-int finalDockingMoveDistance = 15;
-
-// may be overwritten by cartControl with message 'a'
+///////////////////////////////////////////////////////////////////////////////
+// these values may get overwritten by cartControl with message 'a'
 int FLOOR_MAX_OBSTACLE = 15;
 int FLOOR_MAX_ABYSS = 20;
+int NUM_REPEATED_MEASURES = 6;
+int DELAY_BETWEEN_ANALOG_READS = 20;	// may get overwritten by cart control
+int MIN_MEASURE_CYCLE_DURATION = 70;  // may get overwritten by cart control
+int finalDockingMoveDistance = 15;
+////////////////////////////////////////////////////////////////////////////////
 
 char* MOVEMENT_STATUS_NAMES[] = {"MOVING", "OBSTACLE", "ABYSS", "STOPPED"};
 char* MOVEMENT_NAMES[] = { "STOP", "FORWARD", "FOR_DIAG_RIGHT", "FOR_DIAG_LEFT",
@@ -149,12 +150,23 @@ void setup()
 	Serial.println("MotorizedBase v1.6");
 
 	// wait for received configuration values
-	unsigned long timeoutWait = millis() + 15000;
+	unsigned long timeoutWait = millis() + 5000;
 	while (!configurationComplete && millis() < timeoutWait) { 
 		delay(500);
 		checkCommand();
 	}
-	Serial.println("configuration values received, Arduino continues setup");
+	if (millis() > timeoutWait) {
+		Serial.println("no configuration values received, using default values");
+	} else {
+		Serial.println("configuration values received, Arduino continues setup");
+	}
+	// log the active values
+	Serial.print(" FLOOR_MAX_OBSTACLE: "); Serial.println(FLOOR_MAX_OBSTACLE);
+	Serial.print(" FLOOR_MAX_ABYSS: "); Serial.println(FLOOR_MAX_ABYSS);
+	Serial.print(" NUM_REPEATED_MEASURES: "); Serial.println(NUM_REPEATED_MEASURES);
+	Serial.print(" DELAY_BETWEEN_ANALOG_READS: "); Serial.println(DELAY_BETWEEN_ANALOG_READS);
+	Serial.print(" MIN_MEASURE_CYCLE_DURATION: "); Serial.println(MIN_MEASURE_CYCLE_DURATION);
+	Serial.print(" finalDockingMoveDistance: "); Serial.println(finalDockingMoveDistance);
 
 	setupFahren();
 
@@ -310,7 +322,7 @@ void loop()
 
 	// monitor cpu free time
 	if (loopCount > 200) {
-		Serial.print("avg wait ms in loop: "); Serial.println(avgWait / loopCount);
+		//Serial.print("avg wait ms in loop: "); Serial.println(avgWait / loopCount);
 		avgWait = 0;
 		loopCount = 0;
 	}

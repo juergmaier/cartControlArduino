@@ -203,7 +203,7 @@ void checkCommand() {
 			Serial.println();
 			break;
 
-		case '7':  // test sensor
+		case '7':  // test IR sensor
 
 			MOVEMENT cartDirection;
 
@@ -287,16 +287,6 @@ void checkCommand() {
 
 			strtokIndx = strtok(NULL, ",");  // next item
 			finalDockingMoveDistance = atoi(strtokIndx);
-
-			Serial.print("msg a: config, ");
-			Serial.print(" MAX_OBSTACLE: "); Serial.print(FLOOR_MAX_OBSTACLE);
-			Serial.print(" MAX_ABYSS: "); Serial.print(FLOOR_MAX_ABYSS);
-			Serial.println();
-
-			Serial.print("config: NUM_REPEATED_MEASURES: "); Serial.println(NUM_REPEATED_MEASURES);
-			Serial.print(" DELAY_BETWEEN_ANALOG_READS: "); Serial.println(DELAY_BETWEEN_ANALOG_READS);
-			Serial.print(" MIN_MEASURE_CYCLE_DURATION: "); Serial.println(MIN_MEASURE_CYCLE_DURATION);
-			Serial.print(" finalDockingMoveDistance: "); Serial.println(finalDockingMoveDistance);
 
 			break;
 

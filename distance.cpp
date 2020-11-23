@@ -73,7 +73,7 @@ static servoDefinition servoDefinitions[SWIPE_SERVOS_COUNT]{
 
 
 // sensorId, sensorName, sensorTyp, sensorRange, installed, pin, servoId, floorDistance
-// swiped sensors should show 15, fixed sensors 18 cm
+// swiped sensors should show 15 cm, fixed sensors 18 cm
 floorSensorDefinition floorSensorDefinitions[FLOOR_SENSORS_COUNT]{
 //	  sensorId;          sensorName[20];    TYPE; swipe; installed; sensorPin; servoId
 	{ FRONT_LEFT,        "front left",       A41, true,  true,      A2,         FL},
@@ -137,34 +137,63 @@ int analogToDistanceA41(int adc_value)
 
 ////////////////////////////////////////////////////////////////////////
 void setupSwipeServos(int dockingSwitch) {
+
 	Serial.println("setup swipe servos");
 	int Pin;
 	for (int sensorId = 0; sensorId < SWIPE_SERVOS_COUNT; sensorId++) {
 	//for (int sensorId = 2; sensorId < 3; sensorId++) {
 		Pin = servoDefinitions[sensorId].servoPin;
 		if (servoDefinitions[sensorId].installed) pinMode(Pin, OUTPUT);
+	}
 
-		// check for startup with activated docking switch
-		// in that case do not run the initial check on the swipe servos as we are right 
-		// in front of the power station
-		if (dockingSwitch == 0) {
+	// check for startup with activated docking switch
+	// in that case do not run the initial check on the swipe servos as we are right 
+	// in front of the power station
+	if (dockingSwitch != 99) {
 
-			Serial.println("move swipe servo to middle position for checking correct horn position");
-			swipeServos[sensorId].attach(servoDefinitions[sensorId].servoPin);
-			swipeServos[sensorId].write(90+servoDefinitions[sensorId].servoDegreeOffset);
+		Serial.print("for ir sensor testing ignore dockingSwitch value: "); Serial.println(dockingSwitch);
+		Serial.println("now do some repeated ir distance measures to verify infrared sensors");
+		Serial.println("move swipe servo to middle position for checking correct horn position");
+		for (int sensorId = 0; sensorId < FLOOR_SENSORS_COUNT; sensorId++) {
+			
+			Serial.print("sensor: "); Serial.println(floorSensorDefinitions[sensorId].sensorName);
 
-			Serial.println("now do some repeated distance measures to verify infrared sensors");
+			if (floorSensorDefinitions[sensorId].swipe) {
+				swipeServos[sensorId].attach(servoDefinitions[sensorId].servoPin);
+				swipeServos[sensorId].write(90+servoDefinitions[sensorId].servoDegreeOffset);
+				delay(70);   // let the swipe servo reach its destination
+			}
+
+			// let the sensor adjust
+			for (int i = 0; i < 5; i++){
+				analogRead(floorSensorDefinitions[sensorId].sensorPin);
+				delay(2);
+			}
+
 			int distRaw;
 			int distMm;
-			for (int i = 0; i < 20; i++) {
+			int distMin = 500;
+			int distMax = 0;
+
+			for (int i = 0; i < 10; i++) {
 				distRaw = analogRead(floorSensorDefinitions[sensorId].sensorPin);
-				distMm = analogToDistance(GP2Y0A21YK, distRaw);
-				Serial.print("sensor: "); Serial.print(floorSensorDefinitions[sensorId].sensorName);
-				Serial.print(", distRaw: "); Serial.print(distRaw);
+				if (floorSensorDefinitions[sensorId].sensorType == A21) {
+					distMm = analogToDistance(GP2Y0A21YK, distRaw);
+				} else {
+					distMm = analogToDistanceA41(distRaw);
+				}
+				if (distMm < distMin) {distMin = distMm;}
+				if (distMm > distMax) {distMax = distMm;}
+				
+				Serial.print("distRaw: "); Serial.print(distRaw);
 				Serial.print(", distMm: "); Serial.print(distMm);
 				Serial.println();
-				delay(100);
+				delay(DELAY_BETWEEN_ANALOG_READS);
 			}
+			Serial.print("distMin: "); Serial.print(distMin); 
+			Serial.print(", distMax: "); Serial.print(distMax);
+			Serial.print(", range: "); Serial.print(distMax-distMin);
+			Serial.println();
 		}
 	}
 
@@ -228,7 +257,7 @@ void nextSwipeServoStep() {
 ///////////////////////////////////////////////////
 bool isDataCurrent(int sensorId) {
 
-	unsigned long oldestMeasurement = pow(2, 32) - 1;
+	unsigned long oldestMeasurement = pow(2, 31);
 	bool current;
 
 	if (floorSensorDefinitions[sensorId].swipe) {
@@ -408,11 +437,8 @@ void calcDistanceAverage() {
 				if (floorSensorDefinitions[sensorId].sensorType == A41) {
 					distMm = analogToDistanceA41(medianRaw);
 
-					// A41 sensors need some time to adjust, ignore first values after move start
-					//if ((millis() - msMoveCmd) < 500) {
-					//	distMm = DISTANCE_UNKNOWN;
-					//}
-
+					// Problems with A41 sensors, return 150 mm until replaced by A21 sensors
+					//distMm = 150;
 				}
 				if (floorSensorDefinitions[sensorId].sensorType == A21) {
 					distMm = analogToDistance(GP2Y0A21YK, medianRaw);
@@ -469,10 +495,14 @@ int readDistanceSensorRawValues(MOVEMENT activeCartMovement) {
 			if (sensorInvolved[sensorId]) {
 				swipeStep = floorSensorDefinitions[sensorId].swipe ? currentMeasureStep : 0;
 
+				// adjust to new value
 				distRaw = analogRead(floorSensorDefinitions[sensorId].sensorPin);
+				delay(2);
+				distRaw = analogRead(floorSensorDefinitions[sensorId].sensorPin);
+				delay(2);
+				distRaw = analogRead(floorSensorDefinitions[sensorId].sensorPin);
+
 				sensorDataSwipeStep[sensorId].raw[m] = distRaw;
-				
-				delay(1);	//activate/adjust to get reasonable analog readings
 
 				// log every measurement in sensor test and verbose mode
 				if (sensorToTest == sensorId && verbose) {
@@ -485,8 +515,6 @@ int readDistanceSensorRawValues(MOVEMENT activeCartMovement) {
 				}
 			}
 		}
-
-		delay(DELAY_BETWEEN_ANALOG_READS);	// set to a minimal value while getting reasonable analog read values
 	}
 
 	int maxRange = 0;
@@ -738,21 +766,26 @@ void loadFloorReferenceDistances() {
 	int eepromStartAddr;
 	int byteValue;
 	int adjustedValue;
+	String msg;
 
 	// load saved reference distances from EEPROM
+	Serial.println("ir sensor reference distances from eeprom ");
 	for (int sensorId = 0; sensorId < FLOOR_SENSORS_COUNT; sensorId++) {
 	
-		Serial.print("loaded distances "); Serial.print(sensorId); Serial.print(": ");
+		Serial.print(sensorId); Serial.print(": "); Serial.print(floorSensorDefinitions[sensorId].sensorName);
+		Serial.print(": ");
 		int eepromStartAddr = sensorId * NUM_MEASURE_STEPS;
+
+		msg = (String)"!Ac," + sensorId + "," + NUM_MEASURE_STEPS + ",";
 
 		for (int swipeStep = 0; swipeStep < NUM_MEASURE_STEPS; swipeStep++) {
 			byteValue = EEPROM.read(eepromStartAddr + swipeStep);
 			adjustedValue = byteValue < 0 ? byteValue + 128 : byteValue;
 			floorSensorReferenceDistances[sensorId][swipeStep] = adjustedValue;
 			Serial.print(adjustedValue); Serial.print(", ");
+			msg += (String) adjustedValue + ",";
 		}
 		Serial.println();
+
 	}
 }
-
-
