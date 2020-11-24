@@ -229,7 +229,7 @@ void checkCommand() {
 			}
 
 			//setPlannedCartMove(MOVEMENT cartAction, int maxSpeed, int dDistance, int duration, bool moveProtected) {
-			setPlannedCartMove(cartDirection, 0, 2000, 8*MIN_MEASURE_CYCLE_DURATION, true);
+			setPlannedCartMove(cartDirection, 0, 2000, 5000, true);
 
 			break;
 

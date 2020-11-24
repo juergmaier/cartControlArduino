@@ -22,10 +22,10 @@ bool verbose = false;
 // these values may get overwritten by cartControl with message 'a'
 int FLOOR_MAX_OBSTACLE = 15;
 int FLOOR_MAX_ABYSS = 20;
-int NUM_REPEATED_MEASURES = 6;
+int NUM_REPEATED_MEASURES = 7;
 int DELAY_BETWEEN_ANALOG_READS = 20;	// may get overwritten by cart control
-int MIN_MEASURE_CYCLE_DURATION = 70;  // may get overwritten by cart control
-int finalDockingMoveDistance = 15;
+int MIN_MEASURE_CYCLE_DURATION = 80;  // may get overwritten by cart control
+int finalDockingMoveDistance = 12;		//cm!
 ////////////////////////////////////////////////////////////////////////////////
 
 char* MOVEMENT_STATUS_NAMES[] = {"MOVING", "OBSTACLE", "ABYSS", "STOPPED"};

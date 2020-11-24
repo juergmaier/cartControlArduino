@@ -452,6 +452,7 @@ void calcDistanceAverage() {
 				Serial.print(", rawRange: "); Serial.print(sensorDataSwipeStep[sensorId].range);
 				Serial.print(", medianRaw: "); Serial.print(medianRaw);
 				Serial.print(", distance [mm]: "); Serial.print(distMm);
+				Serial.println();
 
 				if (sensorToTest > 0 && verbose) {
 					Serial.println((String)getInfraredSensorName(sensorId)
