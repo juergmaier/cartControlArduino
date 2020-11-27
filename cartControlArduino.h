@@ -72,11 +72,10 @@ extern int NUM_REPEATED_MEASURES;
 extern int DELAY_BETWEEN_ANALOG_READS; 
 extern int MIN_MEASURE_CYCLE_DURATION;
 extern int finalDockingMoveDistance;
-extern int sensorToTest;
+extern int sensorInTest;
 extern bool analogMeasureCycle;
 
 extern bool verbose;
-extern int sensorToTest;
 
 extern cImu platformImu;
 extern cImu headImu;

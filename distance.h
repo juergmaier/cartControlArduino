@@ -60,7 +60,7 @@ typedef struct servoDefinition {
 } servoDefinition;
 
 
-typedef struct floorSensorDefinition {
+typedef struct irSensorDefinition {
 	int sensorId;
 	char sensorName[20];
 	FLOOR_SENSOR_TYPES sensorType;
@@ -68,7 +68,7 @@ typedef struct floorSensorDefinition {
 	bool installed;
 	int sensorPin;
 	int servoID;
-} floorSensorDefinition;
+} irSensorDefinition;
 
 typedef struct floorSensorSwipeStepDataType {
 	int raw[MAX_REPEATED_MEASURES];
@@ -119,8 +119,8 @@ extern int MIN_MEASURE_CYCLE_DURATION;
 
 extern int loopCount;
 
-extern floorSensorDefinition floorSensorDefinitions[];
-extern int floorSensorReferenceDistances[FLOOR_SENSORS_COUNT][NUM_MEASURE_STEPS];
+extern irSensorDefinition irSensorDefinitions[];
+extern int irSensorReferenceDistances[FLOOR_SENSORS_COUNT][NUM_MEASURE_STEPS];
 
 extern floorSensorSwipeStepDataType sensorDataSwipeStep[FLOOR_SENSORS_COUNT];
 
@@ -137,7 +137,7 @@ extern void setupSwipeServos(int);
 extern int readDistanceSensorRawValues(MOVEMENT activeCartMovement);
 extern void evalObstacleOrAbyss(MOVEMENT activeCartMovement);
 extern void logFloorOffset(int sensorId);
-extern void logDistanceValues(int sensorId);
+extern void logIrDistanceValues(int sensorId);
 extern void stopSwipe();
 extern void nextSwipeServoStep();
 extern void saveFloorReferenceToEEPROM(int sensorId);

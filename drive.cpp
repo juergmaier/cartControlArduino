@@ -128,8 +128,8 @@ void setInvolvedSensors(MOVEMENT plannedCartDirection, bool moveProtected) {
 
 	if (verbose) {
 		Serial.print("sensors involved: ");
-		Serial.print("sensorToTest: ");
-		Serial.print(sensorToTest);
+		Serial.print("sensorInTest: ");
+		Serial.print(sensorInTest);
 		Serial.print(", plannedCartDirection: ");
 		Serial.print(MOVEMENT_NAMES[plannedCartDirection]);
 		Serial.print(", sensorsInvolved: ");
@@ -145,11 +145,11 @@ void setInvolvedSensors(MOVEMENT plannedCartDirection, bool moveProtected) {
 			if (sensorId != FLOOR_SENSORS_COUNT) {
 
 				// for activation of swipe servo
-				servoID = floorSensorDefinitions[sensorId].servoID;
+				servoID = irSensorDefinitions[sensorId].servoID;
 				servoInvolved[servoID] = true;
 
-				if (floorSensorDefinitions[sensorId].installed) {
-					sensorInvolved[sensorId] = (sensorToTest == -1 || sensorId == sensorToTest);
+				if (irSensorDefinitions[sensorId].installed) {
+					sensorInvolved[sensorId] = (sensorInTest == -1 || sensorId == sensorInTest);
 				}
 				else sensorInvolved[sensorId] = false;
 
@@ -181,7 +181,7 @@ void applyCartSpeed() {
 	if (cartSpeed > 0) {
 
 		// check for cart speed request in sensor test mode
-		if (sensorToTest > -1) {
+		if (sensorInTest > -1) {
 			Serial.print("PREVENTED SPEED SETTING DURING SENSORTEST");
 			Serial.print(cartSpeed);
 			Serial.println();
@@ -264,19 +264,12 @@ void setPlannedCartMove(MOVEMENT newCartAction, int newMaxSpeed, int newDistance
 	wheelPulseCounter = 0;
 	interrupts();
 
-	if (verbose) {
-		Serial.print("moveDirection: ");
-		Serial.print(MOVEMENT_NAMES[plannedCartMovement]);
-		Serial.print(", speed: ");
-		Serial.print(requestedMaxSpeed);
-		Serial.print(", requestedDistance: ");
-		Serial.print(requestedDistance);
-		Serial.print(" mm, maxMoveDuration: ");
-		Serial.print(maxMoveDuration);
-		Serial.print(" ms, moveProtected: ");
-		Serial.print(moveProtected ? "true" : "false");
-		Serial.println();
-	}
+	Serial.print("plannedCartMove, moveDirection: "); Serial.print(MOVEMENT_NAMES[plannedCartMovement]);
+	Serial.print(", speed: "); Serial.print(requestedMaxSpeed);
+	Serial.print(", requestedDistance: "); Serial.print(requestedDistance);
+	Serial.print(" mm, maxMoveDuration: "); Serial.print(maxMoveDuration);
+	Serial.print(" ms, moveProtected: "); Serial.print(moveProtected ? "true" : "false");
+	Serial.println();
 }
 
 void setPlannedCartRotation(MOVEMENT newCartAction, int newMaxSpeed, int newAngle, int newDuration, bool newMoveProtected) {
@@ -323,6 +316,7 @@ void setPlannedCartRotation(MOVEMENT newCartAction, int newMaxSpeed, int newAngl
 
 void stopMotors() {
 	cartSpeed = 0;
+	sensorInTest = -1;
 	applyCartSpeed();
 	tableStop();
 }
@@ -513,7 +507,7 @@ bool freeMoveAvailable(MOVEMENT moveDirection) {
 
 
 	// if in sensor test mode do not check for obstacle or abyss and continue measuring
-	if (sensorToTest > -1) {
+	if (sensorInTest > -1) {
 		if (verbose) Serial.println("in sensor test mode, no checking of obstacle or abyss with floor sensors");
 		return true;
 	}
@@ -579,13 +573,13 @@ void stopCart(bool moveDone, String reason) {
 		Serial.println(reason);
 	}
 	activeCartMovement = STOP;
+	sensorInTest = -1;
 
 	if (moveDone) {
 
 		// move done, stop swiping and log distance
 		stopSwipe();
 		maxMoveDuration = 0;
-		sensorToTest = -1;
 		inFinalDockingMove = false;
 		//Serial.println("move done");
 
@@ -967,7 +961,7 @@ void handleCartMovement() {
 				Serial.println(moveDuration);
 			}
 			// verify we get encoder signals
-			if ((sensorToTest > -1) && (moveDuration > 500) && (wheelPulseCounter == 0)) {
+			if ((sensorInTest > -1) && (moveDuration > 500) && (wheelPulseCounter == 0)) {
 				stopCart(false, "missing encoder signals");
 				return;
 			}

@@ -74,7 +74,7 @@ static servoDefinition servoDefinitions[SWIPE_SERVOS_COUNT]{
 
 // sensorId, sensorName, sensorTyp, sensorRange, installed, pin, servoId, floorDistance
 // swiped sensors should show 15 cm, fixed sensors 18 cm
-floorSensorDefinition floorSensorDefinitions[FLOOR_SENSORS_COUNT]{
+irSensorDefinition irSensorDefinitions[FLOOR_SENSORS_COUNT]{
 //	  sensorId;          sensorName[20];    TYPE; swipe; installed; sensorPin; servoId
 	{ FRONT_LEFT,        "front left",       A41, true,  true,      A2,         FL},
 	{ FRONT_CENTER,      "front center ",    A41, true,  true,      A7,         FC},
@@ -88,7 +88,7 @@ floorSensorDefinition floorSensorDefinitions[FLOOR_SENSORS_COUNT]{
 	{ RIGHT_SIDE_BACK,   "right side back ", A21, false, true,      A11,        -1}
 };
 
-int floorSensorReferenceDistances[FLOOR_SENSORS_COUNT][NUM_MEASURE_STEPS];
+int irSensorReferenceDistances[FLOOR_SENSORS_COUNT][NUM_MEASURE_STEPS];
 
 // DEFINITION of global variables
 // sensorId with measured closest obstacle
@@ -156,9 +156,9 @@ void setupSwipeServos(int dockingSwitch) {
 		Serial.println("move swipe servo to middle position for checking correct horn position");
 		for (int sensorId = 0; sensorId < FLOOR_SENSORS_COUNT; sensorId++) {
 			
-			Serial.print("sensor: "); Serial.println(floorSensorDefinitions[sensorId].sensorName);
+			Serial.print("sensor: "); Serial.println(irSensorDefinitions[sensorId].sensorName);
 
-			if (floorSensorDefinitions[sensorId].swipe) {
+			if (irSensorDefinitions[sensorId].swipe) {
 				swipeServos[sensorId].attach(servoDefinitions[sensorId].servoPin);
 				swipeServos[sensorId].write(90+servoDefinitions[sensorId].servoDegreeOffset);
 				delay(70);   // let the swipe servo reach its destination
@@ -166,7 +166,7 @@ void setupSwipeServos(int dockingSwitch) {
 
 			// let the sensor adjust
 			for (int i = 0; i < 5; i++){
-				analogRead(floorSensorDefinitions[sensorId].sensorPin);
+				analogRead(irSensorDefinitions[sensorId].sensorPin);
 				delay(2);
 			}
 
@@ -176,8 +176,8 @@ void setupSwipeServos(int dockingSwitch) {
 			int distMax = 0;
 
 			for (int i = 0; i < 10; i++) {
-				distRaw = analogRead(floorSensorDefinitions[sensorId].sensorPin);
-				if (floorSensorDefinitions[sensorId].sensorType == A21) {
+				distRaw = analogRead(irSensorDefinitions[sensorId].sensorPin);
+				if (irSensorDefinitions[sensorId].sensorType == A21) {
 					distMm = analogToDistance(GP2Y0A21YK, distRaw);
 				} else {
 					distMm = analogToDistanceA41(distRaw);
@@ -260,7 +260,7 @@ bool isDataCurrent(int sensorId) {
 	unsigned long oldestMeasurement = pow(2, 31);
 	bool current;
 
-	if (floorSensorDefinitions[sensorId].swipe) {
+	if (irSensorDefinitions[sensorId].swipe) {
 		for (int i = 0; i < NUM_MEASURE_STEPS; i++) {
 			oldestMeasurement = min(oldestMeasurement, sensorData[sensorId][i].lastMeasurementTime);
 		}
@@ -281,7 +281,7 @@ bool isDataCurrent(int sensorId) {
 
 
 int calcFloorOffset(int sensorId, int swipeStep) {
-	return floorSensorReferenceDistances[sensorId][swipeStep] - sensorData[sensorId][swipeStep].distance;
+	return irSensorReferenceDistances[sensorId][swipeStep] - sensorData[sensorId][swipeStep].distance;
 }
 
 
@@ -294,7 +294,7 @@ int maxObstacleSensor(int sensorId) {
 	int thisOffset;
 	int maxObstacle = 0;
 
-	int numMeasureSteps = floorSensorDefinitions[sensorId].swipe ? NUM_MEASURE_STEPS : 1;
+	int numMeasureSteps = irSensorDefinitions[sensorId].swipe ? NUM_MEASURE_STEPS : 1;
 
 	//Serial.print("min value, sensorId: "); Serial.print(sensorId);
 	for (int swipeStep = 0; swipeStep < numMeasureSteps; swipeStep++) {
@@ -328,7 +328,7 @@ int maxAbyssSensor(int sensorId) {
 	int thisOffset;
 	int maxAbyss = 0;
 
-	int numMeasureSteps = floorSensorDefinitions[sensorId].swipe ? NUM_MEASURE_STEPS : 1;
+	int numMeasureSteps = irSensorDefinitions[sensorId].swipe ? NUM_MEASURE_STEPS : 1;
 
 	//Serial.print("min value, sensorId: "); Serial.print(sensorId);
 	for (int swipeStep = 0; swipeStep < numMeasureSteps; swipeStep++) {
@@ -390,7 +390,7 @@ void calcDistanceAverage() {
 	for (int sensorId = 0; sensorId < FLOOR_SENSORS_COUNT; sensorId++) {
 
 		// check for swiping servo
-		swipeStep = floorSensorDefinitions[sensorId].swipe ? currentMeasureStep : 0;
+		swipeStep = irSensorDefinitions[sensorId].swipe ? currentMeasureStep : 0;
 
 		if (sensorInvolved[sensorId]) {
 
@@ -407,7 +407,7 @@ void calcDistanceAverage() {
 				distMm = DISTANCE_UNKNOWN;
 
 				Serial.print("I101: raw measures, sensor: "); 
-				Serial.print(floorSensorDefinitions[sensorId].sensorName); 
+				Serial.print(irSensorDefinitions[sensorId].sensorName); 
 				Serial.print(", raw: ");
 				for (int i = 0; i < NUM_REPEATED_MEASURES; i++) {
 					Serial.print(sensorDataSwipeStep[sensorId].raw[i]);
@@ -434,37 +434,26 @@ void calcDistanceAverage() {
 				medianRaw = sensorDataSwipeStep[sensorId].raw[int(NUM_REPEATED_MEASURES / 2)];
 
 				// calculate mm from raw average for the sensortype used
-				if (floorSensorDefinitions[sensorId].sensorType == A41) {
+				if (irSensorDefinitions[sensorId].sensorType == A41) {
 					distMm = analogToDistanceA41(medianRaw);
 
 					// Problems with A41 sensors, return 150 mm until replaced by A21 sensors
 					//distMm = 150;
 				}
-				if (floorSensorDefinitions[sensorId].sensorType == A21) {
+				if (irSensorDefinitions[sensorId].sensorType == A21) {
 					distMm = analogToDistance(GP2Y0A21YK, medianRaw);
 				}
 
 
 				// log raw value range for sensor and swipeStep
-				Serial.print("I100 sensor: "); Serial.print(floorSensorDefinitions[sensorId].sensorName);
-				Serial.print(" , swipeStep: "); Serial.print(swipeStep);
-				Serial.print(", swipeDir: "); Serial.print(swipeDirection);
-				Serial.print(", rawRange: "); Serial.print(sensorDataSwipeStep[sensorId].range);
-				Serial.print(", medianRaw: "); Serial.print(medianRaw);
-				Serial.print(", distance [mm]: "); Serial.print(distMm);
-				Serial.println();
-
-				if (sensorToTest > 0 && verbose) {
-					Serial.println((String)getInfraredSensorName(sensorId)
-						+ ", dir: " + swipeDirection
-						+ ", swipeStep: " + swipeStep
-						+ ", angle: " + nextSwipeServoAngle
-						+ ", sumDist: " + sumRaw
-						+ ", numVal: " + numValues
-						+ ", min: " + sensorDataSwipeStep[sensorId].raw[0]
-						+ ", max: " + sensorDataSwipeStep[sensorId].raw[NUM_REPEATED_MEASURES-1]
-						+ ", range: " + sensorDataSwipeStep[sensorId].range
-						+ ", median: " + medianRaw);
+				if (sensorInTest == -1 && sensorId == sensorInTest) {
+					Serial.print("I100 sensor: "); Serial.print(irSensorDefinitions[sensorId].sensorName);
+					Serial.print(" , swipeStep: "); Serial.print(swipeStep);
+					Serial.print(", swipeDir: "); Serial.print(swipeDirection);
+					Serial.print(", rawRange: "); Serial.print(sensorDataSwipeStep[sensorId].range);
+					Serial.print(", medianRaw: "); Serial.print(medianRaw);
+					Serial.print(", distance [mm]: "); Serial.print(distMm);
+					Serial.println();
 				}
 			}
 
@@ -494,23 +483,23 @@ int readDistanceSensorRawValues(MOVEMENT activeCartMovement) {
 			// for the sensors involved in the cartDirection
 			//if (sensorInvolved[sensorId] && sensorDataSwipeStep[sensorId].range > MAX_RAW_RANGE) {
 			if (sensorInvolved[sensorId]) {
-				swipeStep = floorSensorDefinitions[sensorId].swipe ? currentMeasureStep : 0;
+				swipeStep = irSensorDefinitions[sensorId].swipe ? currentMeasureStep : 0;
 
 				// adjust to new value
-				distRaw = analogRead(floorSensorDefinitions[sensorId].sensorPin);
+				distRaw = analogRead(irSensorDefinitions[sensorId].sensorPin);
 				delay(2);
-				distRaw = analogRead(floorSensorDefinitions[sensorId].sensorPin);
+				distRaw = analogRead(irSensorDefinitions[sensorId].sensorPin);
 				delay(2);
-				distRaw = analogRead(floorSensorDefinitions[sensorId].sensorPin);
+				distRaw = analogRead(irSensorDefinitions[sensorId].sensorPin);
 
 				sensorDataSwipeStep[sensorId].raw[m] = distRaw;
 
 				// log every measurement in sensor test and verbose mode
-				if (sensorToTest == sensorId && verbose) {
+				if (sensorInTest == sensorId && verbose) {
 					Serial.println((String)getInfraredSensorName(sensorId)
 						+ ", swipeDir: " + swipeDirection
 						+ ", swipeStep:" + swipeStep
-						+ ", analogIn: A" + (floorSensorDefinitions[sensorId].sensorPin - 54)
+						+ ", analogIn: A" + (irSensorDefinitions[sensorId].sensorPin - 54)
 						+ ", measure: " + m
 						+ ", raw: " + distRaw);
 				}
@@ -536,7 +525,7 @@ int readDistanceSensorRawValues(MOVEMENT activeCartMovement) {
 				Serial.print(MAX_RAW_RANGE);
 				Serial.print("), range: ");
 				Serial.print(sensorDataSwipeStep[sensorId].range);
-				Serial.print(" sensor: "); Serial.print(floorSensorDefinitions[sensorId].sensorName);
+				Serial.print(" sensor: "); Serial.print(irSensorDefinitions[sensorId].sensorName);
 				Serial.println();
 			}
 			// find the maxRange
@@ -561,7 +550,7 @@ void evalObstacleOrAbyss(MOVEMENT activeCartMovement) {
 
 		// sensor is involved in the move direction
 		// swipeStep is either swipe step or 0
-		swipeStep = floorSensorDefinitions[sensorId].swipe ? currentMeasureStep : 0;
+		swipeStep = irSensorDefinitions[sensorId].swipe ? currentMeasureStep : 0;
 
 		// use the calibrated floor distance to find max obstacle or abyss
 		int floorOffset;
@@ -569,15 +558,15 @@ void evalObstacleOrAbyss(MOVEMENT activeCartMovement) {
 			floorOffset = DISTANCE_UNKNOWN;
 		}
 		else {
-			floorOffset = floorSensorReferenceDistances[sensorId][swipeStep] - sensorData[sensorId][swipeStep].distance;
+			floorOffset = irSensorReferenceDistances[sensorId][swipeStep] - sensorData[sensorId][swipeStep].distance;
 			if (floorOffset > sensorObstacleMax[sensorId]) sensorObstacleMax[sensorId] = floorOffset;
 			if (-floorOffset > sensorAbyssMax[sensorId]) sensorAbyssMax[sensorId] = -floorOffset;
 		}
-		if (sensorToTest > 0 && verbose) {		// in sensor test and verbose mode 
+		if (sensorInTest > 0 && verbose) {		// in sensor test and verbose mode 
 			Serial.println((String)getInfraredSensorName(sensorId)
 				+ ", swipeStep: " + swipeStep
 				+ ", distance: " + sensorData[sensorId][swipeStep].distance
-				+ ", reference: " + floorSensorReferenceDistances[sensorId][swipeStep]
+				+ ", reference: " + irSensorReferenceDistances[sensorId][swipeStep]
 				+ ", floorOffset: " + floorOffset
 				+ ", max obstacle: " + sensorObstacleMax[sensorId]
 				+ ", max abyss: " + sensorAbyssMax[sensorId]);
@@ -594,13 +583,13 @@ void evalObstacleOrAbyss(MOVEMENT activeCartMovement) {
 			// check for last position in swipe
 			if ((nextMeasureStep == NUM_MEASURE_STEPS) 
 				|| nextMeasureStep == -1
-				|| !floorSensorDefinitions[sensorId].swipe) {
+				|| !irSensorDefinitions[sensorId].swipe) {
 
 				logFloorOffset(sensorId);
 
 				// in case of a sensor test log the measured distances too
-				if (sensorId == sensorToTest) {
-					logDistanceValues(sensorId);
+				if (sensorId == sensorInTest) {
+					logIrDistanceValues(sensorId);
 				}
 
 				Serial.println((String)"swipe summary: " + getInfraredSensorName(sensorId)
@@ -622,13 +611,13 @@ void logFloorOffset(int sensorId) {
 	int thisOffset;
 
 	// check type of sensor, swiping or fixed
-	int numMeasureSteps = floorSensorDefinitions[sensorId].swipe ? NUM_MEASURE_STEPS : 1;
+	int numMeasureSteps = irSensorDefinitions[sensorId].swipe ? NUM_MEASURE_STEPS : 1;
 		
 	// !A1,<sensorId>,<NUM_MEASURE_STEPS>,[<floorOffsetValues>]
 	msg = (String)"!A1," + sensorId + "," + numMeasureSteps + ",";
 
 	for (int swipeStep = 0; swipeStep < numMeasureSteps; swipeStep++) {
-		thisOffset = floorSensorReferenceDistances[sensorId][swipeStep] - sensorData[sensorId][swipeStep].distance;
+		thisOffset = irSensorReferenceDistances[sensorId][swipeStep] - sensorData[sensorId][swipeStep].distance;
 
 		// log the floor offset
 		msg += (String)(thisOffset) + ",";
@@ -638,15 +627,15 @@ void logFloorOffset(int sensorId) {
 }
 
 /////////////////////////////
-void logDistanceValues(int sensorId) {
+void logIrDistanceValues(int sensorId) {
 
 	String msg;
 	int distance;
 
 	// check type of sensor, swiping or fixed
-	int numMeasureSteps = floorSensorDefinitions[sensorId].swipe ? NUM_MEASURE_STEPS : 1;
+	int numMeasureSteps = irSensorDefinitions[sensorId].swipe ? NUM_MEASURE_STEPS : 1;
 
-	// !A1,<sensorId>,<NUM_MEASURE_STEPS>,[<distanceValues>,]
+	// !A7,<sensorId>,<NUM_MEASURE_STEPS>,[<distanceValues>,]
 	msg = (String)"!A7," + sensorId + "," + numMeasureSteps + ",";
 
 	// add the measured distances
@@ -672,7 +661,7 @@ bool checkFloorSensors(MOVEMENT direction) {
 
 		if (sensorInvolved[sensorId]) {
 
-			floorSensorDefinition *senDef = &floorSensorDefinitions[sensorId];
+			irSensorDefinition *senDef = &irSensorDefinitions[sensorId];
 
 			//Serial.print("check sensor distance: "); Serial.print(FLOOR_SENSOR_RANGE_NAMES[range]);
 			if (senDef->installed) {
@@ -753,7 +742,7 @@ void stopSwipe() {
 
 
 const char* getInfraredSensorName(int sensorId) {
-	return floorSensorDefinitions[sensorId].sensorName;
+	return irSensorDefinitions[sensorId].sensorName;
 }
 
 
@@ -773,8 +762,8 @@ void loadFloorReferenceDistances() {
 	Serial.println("ir sensor reference distances from eeprom ");
 	for (int sensorId = 0; sensorId < FLOOR_SENSORS_COUNT; sensorId++) {
 	
-		Serial.print(sensorId); Serial.print(": "); Serial.print(floorSensorDefinitions[sensorId].sensorName);
-		Serial.print(": ");
+		//Serial.print(sensorId); Serial.print(": "); Serial.print(irSensorDefinitions[sensorId].sensorName);
+		//Serial.print(": ");
 		int eepromStartAddr = sensorId * NUM_MEASURE_STEPS;
 
 		msg = (String)"!Ac," + sensorId + "," + NUM_MEASURE_STEPS + ",";
@@ -782,11 +771,11 @@ void loadFloorReferenceDistances() {
 		for (int swipeStep = 0; swipeStep < NUM_MEASURE_STEPS; swipeStep++) {
 			byteValue = EEPROM.read(eepromStartAddr + swipeStep);
 			adjustedValue = byteValue < 0 ? byteValue + 128 : byteValue;
-			floorSensorReferenceDistances[sensorId][swipeStep] = adjustedValue;
-			Serial.print(adjustedValue); Serial.print(", ");
+			irSensorReferenceDistances[sensorId][swipeStep] = adjustedValue;
+			//Serial.print(adjustedValue); Serial.print(", ");
 			msg += (String) adjustedValue + ",";
 		}
-		Serial.println();
+		Serial.println(msg);
 
 	}
 }

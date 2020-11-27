@@ -87,6 +87,9 @@ void checkCommand() {
 	int eepromStartAddr;
 	int distance;
 
+	MOVEMENT cartDirection;
+	int testDuration = 1000;
+
 	if (Serial.available() > 0) {
 		recvWithEndMarker();
 		//standalone: SerialMonitor, select Line Feed and send command, 
@@ -106,8 +109,11 @@ void checkCommand() {
 			}
 		}
 
-		
+		///////////////////////////////////////////////
+		///////////////////////////////////////////////
 		// if switch is not working check for new variable assignments within switch section and remove them
+		///////////////////////////////////////////////
+		///////////////////////////////////////////////
 		switch (mode) {		
 			
 		case '1':  // move dir 1=forward .. 6=backward, e.g. 1,<dir d1>,<speed d3>,<distance d4>,<max duration d4>
@@ -205,31 +211,34 @@ void checkCommand() {
 
 		case '7':  // test IR sensor
 
-			MOVEMENT cartDirection;
-
 			strtokIndx = strtok(msgCopyForParsing, ","); // msgId, "7"
+			strtokIndx = strtok(NULL, ","); // sensorId
+			sensorInTest = atoi(strtokIndx); 
 
-			strtokIndx = strtok(NULL, ","); // next item
-			sensorToTest = atoi(strtokIndx);    // sensorId
-
-			Serial.println((String)"sensorToTest, Id: " + sensorToTest + ", sensorName: " + floorSensorDefinitions[sensorId].sensorName);
+			Serial.print("sensorInTest, Id: "); Serial.print(sensorInTest);
+			Serial.print(", sensorName: "); Serial.print(irSensorDefinitions[sensorInTest].sensorName);
+			Serial.println();
 
 			// set a move direction that includes the sensor to test
-			if (sensorToTest >= 0 && sensorToTest < 3) {
+			if (sensorInTest >= 0 && sensorInTest < 3) {
 				cartDirection = FORWARD;
+				testDuration = 5000;
 			}
-			if (sensorToTest >= 3 && sensorToTest < 6) {
+			if (sensorInTest >= 3 && sensorInTest < 6) {
 				cartDirection = BACKWARD;
+				testDuration = 5000;
 			}
-			if (sensorToTest == 6 || sensorToTest == 7) {
+			if (sensorInTest == 6 || sensorInTest == 7) {
 				cartDirection = LEFT;
+				testDuration = 500;
 			}
-			if (sensorToTest == 8 || sensorToTest == 9) {
+			if (sensorInTest == 8 || sensorInTest == 9) {
 				cartDirection = RIGHT;
+				testDuration = 500;
 			}
 
 			//setPlannedCartMove(MOVEMENT cartAction, int maxSpeed, int dDistance, int duration, bool moveProtected) {
-			setPlannedCartMove(cartDirection, 0, 2000, 5000, true);
+			setPlannedCartMove(cartDirection, 0, 2000, testDuration, true);
 
 			break;
 
@@ -349,7 +358,7 @@ void checkCommand() {
 				distance = atoi(strtokIndx);    // sensorId
 
 				EEPROM.write(eepromStartAddr + swipeStep, distance);
-				floorSensorReferenceDistances[sensorId][swipeStep] = distance;
+				irSensorReferenceDistances[sensorId][swipeStep] = distance;
 				
 			}
 			break;
@@ -365,8 +374,6 @@ void checkCommand() {
 				Serial.println("verbose turned on");
 			}
 			break;
-
-
 
 
 		default:

@@ -86,7 +86,7 @@ volatile unsigned long wheelPulseCounter = 0;
 
 int _speedUnifyer[MOTORS_COUNT]{ 104,100,96,82 };
 
-int sensorToTest = -1;
+int sensorInTest = -1;
 
 // we use only 1 interrupt and simply count the flanks as we know the direction
 void wheelChange() {
