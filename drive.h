@@ -19,12 +19,13 @@ extern int FLOOR_MAX_ABYSS;
 extern unsigned long _last12VCheckMillis;
 extern int _mVolts;
 extern volatile unsigned long wheelPulseCounter;
-extern unsigned long msMoveCmd;
+extern unsigned long moveRequestReceivedMillis;
 
 extern int MIN_MEASURE_CYCLE_DURATION;
 
 extern boolean servoInvolved[];
-extern boolean sensorInvolved[];
+extern int involvedIrSensors[];
+extern int numInvolvedIrSensors;
 
 enum MOTORS { MOTOR_FRONT_RIGHT, MOTOR_FRONT_LEFT, MOTOR_BACK_RIGHT, MOTOR_BACK_LEFT, MOTORS_COUNT };
 enum SPEED_PHASE {ACCELERATE, CRUISE, DECELERATE};
@@ -36,15 +37,16 @@ extern void setupFahren();
 
 // driving direction
 extern void setPlannedCartMove(MOVEMENT, int, int, int, bool);
-extern void setPlannedCartRotation(MOVEMENT, int, int, int, bool);
+extern void setPlannedCartRotation(MOVEMENT, int, int, int);
 extern MOVEMENT plannedCartMovement;
+extern MOVEMENT activeCartMovement;
 
 // stop base
 extern void stopCart(bool, String);
 
 // drive
 extern void handleCartMovement();
-extern void setInvolvedSensors(MOVEMENT plannedCartDirection, bool moveProtected);
+extern void setInvolvedIrSensors(MOVEMENT plannedCartDirection, bool moveProtected);
 
 extern int checkUltrasonicDistances();
 

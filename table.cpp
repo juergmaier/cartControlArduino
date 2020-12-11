@@ -29,7 +29,7 @@ void updateSensorSetPoints(int thisTableHeight) {
 
 void tableSetup()
 {
-	Serial.println("table setup");
+	Serial.println(F("table setup"));
 	analogWrite(PIN_TABLE_PWM1, 0);
 	analogWrite(PIN_TABLE_PWM2, 0);
 
@@ -40,11 +40,11 @@ void tableSetup()
 	digitalWrite(PIN_TABLE_POWER, SWITCH_OFF);
 
 	int tableHeight = getTableHeight();
-	Serial.print("table setup done, current height: ");
+	Serial.print(F("table setup done, current height: "));
 	Serial.println(tableHeight);
 
 	updateSensorSetPoints(tableHeight);
-	Serial.println("table setup done");
+	Serial.println(F("table setup done"));
 }
 
 TABLE_STATUS getTableStatus() {
@@ -67,9 +67,9 @@ int getTableHeight() {
 	int height = mm + 670;			// the lower height of the table
 
 	
-	Serial.print("table raw height value: ");
+	Serial.print(F("table raw height value: "));
 	Serial.print(raw);
-	Serial.print(", calculated height value: ");
+	Serial.print(F(", calculated height value: "));
 	Serial.print(round(height));
 	Serial.println();
 
@@ -83,7 +83,7 @@ void tableUp() {
 
 		tableStatus = UP;
 
-		Serial.println("Move table up");
+		Serial.println(F("Move table up"));
 
 		digitalWrite(PIN_TABLE_POWER, SWITCH_ON);
 		delay(1000);
@@ -102,7 +102,7 @@ void tableUp() {
 
 
 		// get current roll of table
-		platformImu.readBnoSensorData();
+		platformImu.changedBnoSensorData();
 
 		// compensate for motor speed differences using the bno055 roll value
 		if (platformImu.getRoll() > 0.25) {
@@ -110,12 +110,12 @@ void tableUp() {
 			// increase speed2 if possible
 			if (speed2Up < 230) {
 				speed2Up += SPEED_INCREMENT;
-				if (tableVerbose) Serial.println("increase speed2Up");
+				if (tableVerbose) Serial.println(F("increase speed2Up"));
 			}
 			// else reduce speed1 but limit it
 			if (speed1Up > 150) {
 				speed1Up -= SPEED_INCREMENT;
-				if (tableVerbose) Serial.println("decrease speed1Up");
+				if (tableVerbose) Serial.println(F("decrease speed1Up"));
 			}
 		}
 		if (platformImu.getRoll() < -0.25) {
@@ -123,19 +123,19 @@ void tableUp() {
 			// increase speed1 if possible
 			if (speed1Up < 230) {
 				speed1Up += SPEED_INCREMENT;
-				if (tableVerbose) Serial.println("increase speed1Up");
+				if (tableVerbose) Serial.println(F("increase speed1Up"));
 			}
 			if (speed2Up > 150) {
 				speed2Up -= SPEED_INCREMENT;
-				if (tableVerbose) Serial.println("decrease speed2Up");
+				if (tableVerbose) Serial.println(F("decrease speed2Up"));
 			}
 		}
 		if (tableVerbose) {
-			Serial.print("table up, roll: ");
+			Serial.print(F("table up, roll: "));
 			Serial.print(platformImu.getRoll());
-			Serial.print(", speed1Up: ");
+			Serial.print(F(", speed1Up: "));
 			Serial.print(speed1Up);
-			Serial.print(", speed2Up: ");
+			Serial.print(F(", speed2Up: "));
 			Serial.print(speed2Up);
 			Serial.println();
 		}
@@ -152,7 +152,7 @@ void tableUp() {
 		if (currMillis - _lastProgressCheckMillis > 500L) {
 
 			if (abs(_prevTableHeight - _currentTableHeight) < 10) {
-				Serial.println("table up, no progress detected, stop");
+				Serial.println(F("table up, no progress detected, stop"));
 				tableStop();
 			}
 			_prevTableHeight = _currentTableHeight;
@@ -161,10 +161,10 @@ void tableUp() {
 	}
 	// stop move
 	if (millis() - _tableMoveStart >= 5000) {
-		Serial.print("current timeout for move is 5s");
+		Serial.print(F("current timeout for move is 5s"));
 	}
 	if (_currentTableHeight >= _requestedTableHeight) {
-		Serial.print("requested height reached");
+		Serial.print(F("requested height reached"));
 	}
 	Serial.println();
 	tableStop();
@@ -178,7 +178,7 @@ void tableDown() {
 
 		tableStatus = DOWN;
 
-		Serial.println("Table down");
+		Serial.println(F("Table down"));
 
 		digitalWrite(PIN_TABLE_POWER, SWITCH_ON);
 		delay(50);
@@ -198,7 +198,7 @@ void tableDown() {
 		&& tableStatus == DOWN) {
 
 		// get current roll of table
-		platformImu.readBnoSensorData();
+		platformImu.changedBnoSensorData();
 
 		// compensate for motor speed differences using the bno055 roll value
 		if (platformImu.getRoll() > 0.25) {
@@ -206,24 +206,24 @@ void tableDown() {
 			// increase speed1 if possible
 			if (speed1Down < 230) {
 				speed1Down += SPEED_INCREMENT;
-				if (tableVerbose) Serial.println("increase speed1");
+				if (tableVerbose) Serial.println(F("increase speed1"));
 			}
 			// and reduce speed2
 			if (speed2Down > 150) {
 				speed2Down -= SPEED_INCREMENT;
-				if (tableVerbose) Serial.println("decrease speed2");
+				if (tableVerbose) Serial.println(F("decrease speed2"));
 			}
 		}
 		if (platformImu.getRoll() < -0.25) {
 
 			if (speed2Down < 230) {
 				speed2Down += SPEED_INCREMENT;
-				if (tableVerbose) Serial.println("increase speed2");
+				if (tableVerbose) Serial.println(F("increase speed2"));
 			}
 			// and reduce speed1
 			if (speed1Down > 150) {
 				speed1Down -= SPEED_INCREMENT;
-				if (tableVerbose) Serial.println("decrease speed1");
+				if (tableVerbose) Serial.println(F("decrease speed1"));
 			}
 
 		}
@@ -232,11 +232,11 @@ void tableDown() {
 		analogWrite(PIN_TABLE_PWM2, speed2Down);
 
 		if (tableVerbose) {
-			Serial.print(", table down, roll: ");
+			Serial.print(F(", table down, roll: "));
 			Serial.print(platformImu.getRoll());
-			Serial.print(", speed1Down: ");
+			Serial.print(F(", speed1Down: "));
 			Serial.print(speed1Down);
-			Serial.print(", speed2Down: ");
+			Serial.print(F(", speed2Down: "));
 			Serial.print(speed2Down);
 			Serial.println();
 		}
@@ -249,7 +249,7 @@ void tableDown() {
 		if (currMillis - _lastProgressCheckMillis > 500L) {
 
 			if (_prevTableHeight - _currentTableHeight < 2) {
-				Serial.println("table down, no progress detected, stop");
+				Serial.println(F("table down, no progress detected, stop"));
 				tableStop();
 			}
 			_prevTableHeight = _currentTableHeight;
@@ -258,10 +258,10 @@ void tableDown() {
 	}
 	// stop move
 	if (millis() - _tableMoveStart >= 5000) {
-		Serial.print("current timeout for move is 5s");
+		Serial.print(F("current timeout for move is 5s"));
 	}
 	if (_currentTableHeight < _requestedTableHeight) {
-		Serial.print("requested height reached");
+		Serial.print(F("requested height reached"));
 	}
 	Serial.println();
 	tableStop();
@@ -273,7 +273,7 @@ void tableStop() {
 	if (tableStatus != TABLE_STOP) {
 
 		tableStatus = TABLE_STOP;
-		Serial.println("Table stop"); 
+		Serial.println(F("Table stop")); 
 
 		analogWrite(PIN_TABLE_PWM1, 0);
 		analogWrite(PIN_TABLE_PWM2, 0);
@@ -287,25 +287,25 @@ void tableStop() {
 
 void moveTableToHeight(int requestedHeight) {
 
-	Serial.print("moveTableToHeight: ");
+	Serial.print(F("moveTableToHeight: "));
 	Serial.print(requestedHeight);
 	Serial.println();
 
 	// check for valid request range
 	if (requestedHeight > 930) {
-		Serial.println("max height is 930, command ignored");
+		Serial.println(F("max height is 930, command ignored"));
 		return;
 	}
 
 	if (requestedHeight < 600) {
-		Serial.println("min height is 600, command ignored");
+		Serial.println(F("min height is 600, command ignored"));
 		return;
 	}
 
 	// check for valid current range
 	_currentTableHeight = getTableHeight();
 	if ((_currentTableHeight > 930) || (_currentTableHeight < 600)) {
-		Serial.print("moveTable, not a valid current height");
+		Serial.print(F("moveTable, not a valid current height"));
 		Serial.print(_currentTableHeight);
 		Serial.println();
 		return;
@@ -318,11 +318,11 @@ void moveTableToHeight(int requestedHeight) {
 	_lastProgressCheckMillis = millis() + 1000;	// delay first progress check
 
 	if (requestedHeight > _currentTableHeight) {
-		Serial.println("table up");
+		Serial.println(F("table up"));
 		tableUp();
 	}
 	else {
-		Serial.println("table down");
+		Serial.println(F("table down"));
 		tableDown();
 	}
 }

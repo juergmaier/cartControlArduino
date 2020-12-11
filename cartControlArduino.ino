@@ -16,7 +16,7 @@
 #include "communication.h"
 
 
-bool verbose = false;
+bool verbose = true;
 
 ///////////////////////////////////////////////////////////////////////////////
 // these values may get overwritten by cartControl with message 'a'
@@ -27,6 +27,10 @@ int DELAY_BETWEEN_ANALOG_READS = 20;	// may get overwritten by cart control
 int MIN_MEASURE_CYCLE_DURATION = 80;  // may get overwritten by cart control
 int finalDockingMoveDistance = 12;		//cm!
 ////////////////////////////////////////////////////////////////////////////////
+
+// when reading ir sensor values wait at least this time to allow servo to reach its destination
+int IR_MIN_WAIT_SWIPE_SERVO = 70;  // wait time after moving swipe servos to next step
+int IR_MIN_READS_TO_ADJUST = 5;
 
 char* MOVEMENT_STATUS_NAMES[] = {"MOVING", "OBSTACLE", "ABYSS", "STOPPED"};
 char* MOVEMENT_NAMES[] = { "STOP", "FORWARD", "FOR_DIAG_RIGHT", "FOR_DIAG_LEFT",
@@ -88,7 +92,7 @@ int _speedUnifyer[MOTORS_COUNT]{ 104,100,96,82 };
 
 int sensorInTest = -1;
 
-// we use only 1 interrupt and simply count the flanks as we know the direction
+// use only 1 interrupt and count the flanks as we know the current direction
 void wheelChange() {
 	wheelPulseCounter += 1;         
 }
@@ -107,13 +111,14 @@ void initializeUltrasonicSensors() {
 	delay(500);
 
 	// try to get distances
-	Serial.println("request ultrasonic distances from Arduino nano over I2C");
+	Serial.println(F("request ultrasonic distances from Arduino nano over I2C"));
 	int numBytes = Wire.requestFrom(ULTRASONIC_DISTANCE_DEVICE_I2C_ADDRESS, 1 + ULTRASONIC_DISTANCE_SENSORS_COUNT);
 
 	// first byte is validity mask
 	if (Wire.available()) ultrasonicDistanceSensorValidity = Wire.read();
-	Serial.print("validity: "); Serial.print(ultrasonicDistanceSensorValidity, BIN); Serial.print(", distances: ");
+	Serial.print(F("validity: ")); Serial.print(ultrasonicDistanceSensorValidity, BIN); Serial.print(F(", distances: "));
 
+	// following reads are distances for each usSensor
 	int usSensorId = 0;
 	while (Wire.available()) {
 		ultrasonicDistanceSensorValues[usSensorId] = Wire.read();
@@ -123,12 +128,12 @@ void initializeUltrasonicSensors() {
 	Serial.println();
 
 	// send stop measure command
-	Serial.println("stop measuring ultrasonic distances");
+	Serial.println(F("stop measuring ultrasonic distances"));
 	Wire.beginTransmission(ULTRASONIC_DISTANCE_DEVICE_I2C_ADDRESS);
 	Wire.write(2);
 	Wire.endTransmission();
 
-	Serial.println("ultrasonic sensors available");
+	Serial.println(F("ultrasonic sensors available"));
 }
 
 //////////////////////////////////////////////////////////////
@@ -147,7 +152,7 @@ void setup()
 
 	Serial.begin(115200);
 
-	Serial.println("MotorizedBase v1.6");
+	Serial.println(F("MotorizedBase v1.6"));
 
 	// wait for received configuration values
 	unsigned long timeoutWait = millis() + 5000;
@@ -156,45 +161,49 @@ void setup()
 		checkCommand();
 	}
 	if (millis() > timeoutWait) {
-		Serial.println("no configuration values received, using default values");
+		Serial.println(F("no configuration values received, using default values"));
 	} else {
-		Serial.println("configuration values received, Arduino continues setup");
+		Serial.println(F("configuration values received, Arduino continues setup"));
 	}
 	// log the active values
-	Serial.print(" FLOOR_MAX_OBSTACLE: "); Serial.println(FLOOR_MAX_OBSTACLE);
-	Serial.print(" FLOOR_MAX_ABYSS: "); Serial.println(FLOOR_MAX_ABYSS);
-	Serial.print(" NUM_REPEATED_MEASURES: "); Serial.println(NUM_REPEATED_MEASURES);
-	Serial.print(" DELAY_BETWEEN_ANALOG_READS: "); Serial.println(DELAY_BETWEEN_ANALOG_READS);
-	Serial.print(" MIN_MEASURE_CYCLE_DURATION: "); Serial.println(MIN_MEASURE_CYCLE_DURATION);
-	Serial.print(" finalDockingMoveDistance: "); Serial.println(finalDockingMoveDistance);
+	Serial.print(F(" FLOOR_MAX_OBSTACLE: ")); Serial.println(FLOOR_MAX_OBSTACLE);
+	Serial.print(F(" FLOOR_MAX_ABYSS: ")); Serial.println(FLOOR_MAX_ABYSS);
+	Serial.print(F(" NUM_REPEATED_MEASURES: ")); Serial.println(NUM_REPEATED_MEASURES);
+	Serial.print(F(" DELAY_BETWEEN_ANALOG_READS: ")); Serial.println(DELAY_BETWEEN_ANALOG_READS);
+	Serial.print(F(" MIN_MEASURE_CYCLE_DURATION: ")); Serial.println(MIN_MEASURE_CYCLE_DURATION);
+	Serial.print(F(" finalDockingMoveDistance: ")); Serial.println(finalDockingMoveDistance);
 
 	setupFahren();
 
-	// if docking switch is active run distance checks with the sensors
-	Serial.println("check for activated docking switch");
-	delay(2000);
+	delay(500);
 	pinMode(CHARGE_6V_BATTERY_PIN, OUTPUT);
 	// set docking switch port to input
 	pinMode(DOCKING_SWITCH_PIN, INPUT);
 	int dockingSwitch = digitalRead(DOCKING_SWITCH_PIN);
 
+	// if docking switch is not active run distance checks with the sensors
+	Serial.println(F("check for activated docking switch"));
 	setupSwipeServos(dockingSwitch);
 
 	tableSetup();
 
 	// the imu's
-	while (!platformImu.setAddressName(platformBnoAddress, "platformImu", "!Ah")) {
-		Serial.println("could not connect with platform imu");
+	while (!platformImu.setAddressAndName(platformBnoAddress, "platformImu", "!I1")) {
+		Serial.println(F("could not connect with platform imu"));
 		delay(100);
 	}
-	Serial.println("connected with platform imu");
+	Serial.println(F("connected with platform imu"));
+	// read a few times to get stable values
+	for (int i=0; i<5; i++) {int yaw = platformImu.getYaw();}
 	sendImuValues(platformImu);
 
-	while (!headImu.setAddressName(headBnoAddress, "headImu", "!Ai")) {
-		Serial.println("could not connect with head imu");
+	while (!headImu.setAddressAndName(headBnoAddress, "headImu", "!I2")) {
+		Serial.println(F("could not connect with head imu"));
 		delay(100);
 	}
-	Serial.println("connected with head imu");
+	Serial.println(F("connected with head imu"));
+	// read a few times to get stable values
+	for (int i=0; i<5; i++) {int yaw = platformImu.getYaw();}
 	sendImuValues(headImu);
 
 	loadFloorReferenceDistances();
@@ -222,7 +231,7 @@ void setup()
 	// wheel encoder counts by interrupt
 	attachInterrupt(digitalPinToInterrupt(WHEEL_ENCODER_PIN_A), wheelChange, CHANGE);
 
-	Serial.println("Arduino setup done");
+	Serial.println(F("Arduino setup done"));
 	Serial.println("!A0");		//cart ready");
 }
 
@@ -242,26 +251,23 @@ void loop()
 	loopStartMs = millis();
 	loopCount++;
 	
-	//Serial.print("loopCount: ");  Serial.println(loopCount);
-
-	handleCartMovement();
-
+	//Serial.print(F("loopCount: ");  Serial.println(loopCount);
 	// check for new commands
 	checkCommand();
 
+	handleCartMovement();
 
 	// check for changed imu values
 	// limit updates to 10 per second
-	if (headImu.readBnoSensorData()) {
+	if (headImu.changedBnoSensorData()) {
 		if (millis() - headImu.getMillisLastPublished() > 100) {
 			sendImuValues(headImu);
 			headImu.setMillisLastPublished();
 		}
 	}
-	if (platformImu.readBnoSensorData()) {
+	if (platformImu.changedBnoSensorData()) {
 		if (millis() - platformImu.getMillisLastPublished() > 100) {
 			sendImuValues(platformImu);
-			int obstacleSensorId = checkUltrasonicDistances();	// update gui
 			platformImu.setMillisLastPublished();
 		}
 	}
@@ -269,9 +275,9 @@ void loop()
 	// check for heartbeat from controlling computer
 	unsigned long diff = millis() - lastMsg;
 	if (cartControlActive && diff > 15000UL) {  // 500, use longer times for manual tests
-		Serial.print("timeout heartbeat messages, stop cart, time: "); 
-		Serial.print(millis()); Serial.print(" lastMsg: "); Serial.print(lastMsg); 
-		Serial.print(" diff: ");  Serial.println(diff);
+		Serial.print(F("timeout heartbeat messages, stop cart, time: ")); 
+		Serial.print(millis()); Serial.print(F(" lastMsg: ")); Serial.print(lastMsg); 
+		Serial.print(F(" diff: "));  Serial.println(diff);
 		cartControlActive = false;
 		stopCart(true, "no heartbeat from server");
 	}
@@ -283,7 +289,7 @@ void loop()
 		isDocked = dockingSwitchState;
 
 			if (isDocked) {
-				Serial.println("!Ad");		// cart is docked
+				Serial.println("!D1");		// cart is docked
 
 				// aktivate power relais
 				digitalWrite(CHARGE_LAPTOP_BATTERY_PIN, LOW);
@@ -291,7 +297,7 @@ void loop()
 				digitalWrite(CHARGE_12V_BATTERY_PIN, LOW);
 			}
 			else {
-				Serial.println("!Ae");		// cart has undocked
+				Serial.println("!D2");		// cart has undocked
 
 				// deactivate power relais
 				digitalWrite(CHARGE_LAPTOP_BATTERY_PIN, HIGH);
@@ -312,17 +318,15 @@ void loop()
 		avgWait += 20;
 	}
 	else {
-		// in order to let the swipe servos arrive at their destinations
-		// wait depending on process time used in this loop
-		if (workMs < MIN_MEASURE_CYCLE_DURATION) {
-			avgWait += MIN_MEASURE_CYCLE_DURATION - workMs;
-			delay(MIN_MEASURE_CYCLE_DURATION - workMs);
+		if (workMs < 20) {
+			avgWait += (20 - workMs);
+			delay(20 - workMs);
 		}
 	}
 
 	// monitor cpu free time
 	if (loopCount > 200) {
-		//Serial.print("avg wait ms in loop: "); Serial.println(avgWait / loopCount);
+		//Serial.print(F("avg wait ms in main loop: ")); Serial.println(avgWait / loopCount);
 		avgWait = 0;
 		loopCount = 0;
 	}

@@ -9,9 +9,8 @@
 class cImu {
 
 public:
-	bool setAddressName(byte thisAddress, String thisName, String thisId);
-	//void readBnoSensorData(bool publishOnChangeOnly = true);
-	bool readBnoSensorData();
+	bool setAddressAndName(byte thisAddress, String thisName, String thisId);
+	bool changedBnoSensorData();
 	float getYaw();
 	float getRoll();
 	float getPitch();

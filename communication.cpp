@@ -10,9 +10,6 @@
 #include "bno055.h"
 #include "distance.h"
 
-
-int baseTimeRotation = 2500;	// add this time for rotational max duration limit
-
 // heartbeat
 unsigned long lastMsg;
 
@@ -54,8 +51,8 @@ void recvWithEndMarker() {
 			newData = true;
 			cartControlActive = true;
 			lastMsg = millis();
-			//Serial.print("message received, millis: ");
-			//Serial.print(millis()); Serial.print(" lastMsg: ");
+			//Serial.print(F("message received, millis: "));
+			//Serial.print(millis()); Serial.print(F(" lastMsg: "));
 			//Serial.println(lastMsg);
 		}
 	}
@@ -103,6 +100,7 @@ void checkCommand() {
 
 		// do not log the heartbeat and the orientation query
 		if (mode != '5' && mode != '6' && mode != '9') {
+		//if (mode != '5' && mode != '6') {
 			//if (verbose) {
 			if (true) {
 				Serial.println((String) "new command, mode: " + mode + ", msg: " + receivedChars);
@@ -134,12 +132,12 @@ void checkCommand() {
 
 			strtokIndx = strtok(NULL, ","); // flagProtected
 			thisMoveProtected = atoi(strtokIndx) == 1;
-
-			setPlannedCartMove(MOVEMENT(thisDir), thisRequestedMaxSpeed, thisRequestedDistance, thisMaxMoveDuration, thisMoveProtected);
+			//Serial.print(F("move command, thisDir: ")); Serial.println(thisDir);
+			setPlannedCartMove(thisDir, thisRequestedMaxSpeed, thisRequestedDistance, thisMaxMoveDuration, thisMoveProtected);
 
 			break;
 
-		case '2':  // rotate counterclockwise or left: 2,<angle>,<speed>
+		case '2':  // rotate counterclockwise or left: 2,<angle>,<speed>,<maxDuration>
 
 			strtokIndx = strtok(msgCopyForParsing, ","); // msgId, "2"
 
@@ -149,13 +147,10 @@ void checkCommand() {
 			strtokIndx = strtok(NULL, ","); // speed
 			thisRequestedMaxSpeed = atoi(strtokIndx);
 
-			strtokIndx = strtok(NULL, ","); // protected flag
-			thisMoveProtected = atoi(strtokIndx) == 1;
+			strtokIndx = strtok(NULL, ","); // duration
+			thisMaxMoveDuration = atoi(strtokIndx);
 
-			// set max duration
-			thisMaxMoveDuration = baseTimeRotation + thisRequestedAngle * 50;
-
-			setPlannedCartRotation(ROTATE_COUNTERCLOCK, thisRequestedMaxSpeed, thisRequestedAngle, thisMaxMoveDuration, thisMoveProtected);
+			setPlannedCartRotation(ROTATE_COUNTERCLOCK, thisRequestedMaxSpeed, thisRequestedAngle, thisMaxMoveDuration);
 
 			break;
 
@@ -174,13 +169,10 @@ void checkCommand() {
 			strtokIndx = strtok(NULL, ","); // speed
 			thisRequestedMaxSpeed = atoi(strtokIndx);
 
-			strtokIndx = strtok(NULL, ","); // protected flag
-			thisMoveProtected = atoi(strtokIndx) == 1;
+			strtokIndx = strtok(NULL, ","); // duration
+			thisMaxMoveDuration = atoi(strtokIndx);
 
-			// set max duration
-			thisMaxMoveDuration = baseTimeRotation + thisRequestedAngle * 50;
-
-			setPlannedCartRotation(ROTATE_CLOCKWISE, thisRequestedMaxSpeed, thisRequestedAngle, thisMaxMoveDuration, thisMoveProtected);
+			setPlannedCartRotation(ROTATE_CLOCKWISE, thisRequestedMaxSpeed, thisRequestedAngle, thisMaxMoveDuration);
 
 			break;
 
@@ -192,10 +184,10 @@ void checkCommand() {
 
 		case '5':  // getCartOrientation
 				   // !A9,<orientation>
-			platformImu.readBnoSensorData();
+			//platformImu.changedBnoSensorData();
 			sendImuValues(platformImu);
 
-			headImu.readBnoSensorData();
+			//headImu.changedBnoSensorData();
 			sendImuValues(headImu);
 
 			break;
@@ -204,7 +196,7 @@ void checkCommand() {
 			msg = receivedChars;
 			newSpeed = msg.substring(1, 4).toInt();
 			//setCartSpeed(newSpeed);
-			Serial.print("set new speed received but ignored: ");
+			Serial.print(F("set new speed received but ignored: "));
 			Serial.print(newSpeed);
 			Serial.println();
 			break;
@@ -215,8 +207,8 @@ void checkCommand() {
 			strtokIndx = strtok(NULL, ","); // sensorId
 			sensorInTest = atoi(strtokIndx); 
 
-			Serial.print("sensorInTest, Id: "); Serial.print(sensorInTest);
-			Serial.print(", sensorName: "); Serial.print(irSensorDefinitions[sensorInTest].sensorName);
+			Serial.print(F("sensorInTest, Id: ")); Serial.print(sensorInTest);
+			Serial.print(F(", sensorName: ")); Serial.print(irSensorDefinitions[sensorInTest].sensorName);
 			Serial.println();
 
 			// set a move direction that includes the sensor to test
@@ -251,9 +243,9 @@ void checkCommand() {
 			_requestedTableHeight = atoi(strtokIndx);
 
 			_currentTableHeight = getTableHeight();
-			Serial.print("request for table height: ");
+			Serial.print(F("request for table height: "));
 			Serial.print(_requestedTableHeight);
-			Serial.print(", current height: ");
+			Serial.print(F(", current height: "));
 			Serial.print(_currentTableHeight);
 			Serial.println();
 			delay(200);
@@ -279,12 +271,12 @@ void checkCommand() {
 
 			strtokIndx = strtok(NULL, ",");  // next item
 			NUM_REPEATED_MEASURES = atoi(strtokIndx);
-			if (NUM_REPEATED_MEASURES > MAX_REPEATED_MEASURES) {
-				NUM_REPEATED_MEASURES = MAX_REPEATED_MEASURES;
-				Serial.print("NUM_REPEATED_MEASURES (");
+			if (NUM_REPEATED_MEASURES > NUM_REPETITIONS_IR_MEASURE) {
+				NUM_REPEATED_MEASURES = NUM_REPETITIONS_IR_MEASURE;
+				Serial.print(F("NUM_REPEATED_MEASURES ("));
 				Serial.print(NUM_REPEATED_MEASURES);
-				Serial.print(") limited to MAX_REPEATED_MEASURES (");
-				Serial.print(MAX_REPEATED_MEASURES);
+				Serial.print(F(") limited to MAX_REPEATED_IR_MEASURES ("));
+				Serial.print(NUM_REPETITIONS_IR_MEASURE);
 				Serial.println();
 			}
 
@@ -306,10 +298,10 @@ void checkCommand() {
 			_speedFactorSideway = msg.substring(18, 23).toFloat();
 			_speedFactorDiagonal = msg.substring(24, 29).toFloat();
 
-			Serial.print("msg b: cart speed calculation, factor: "); Serial.println(_speedFactor);
-			Serial.print(" offset: "); Serial.println(_speedOffset);
-			Serial.print(" factor sideway moves: "); Serial.println(_speedFactorSideway);
-			Serial.print(" factor diagonal moves: "); Serial.println(_speedFactorDiagonal);
+			Serial.print(F("msg b: cart speed calculation, factor: ")); Serial.println(_speedFactor);
+			Serial.print(F(" offset: ")); Serial.println(_speedOffset);
+			Serial.print(F(" factor sideway moves: ")); Serial.println(_speedFactorSideway);
+			Serial.print(F(" factor diagonal moves: ")); Serial.println(_speedFactorDiagonal);
 
 			break;
 
@@ -325,7 +317,7 @@ void checkCommand() {
 				_speedUnifyer[i] = speedPercentage;
 			}
 
-			Serial.print("msg d: motor speed unifyers (fr,fl,br,bl): ");
+			Serial.print(F("msg d: motor speed unifyers (fr,fl,br,bl): "));
 			for (int i = 0; i < MOTORS_COUNT; i++) {
 				Serial.print(_speedUnifyer[i]);
 				Serial.print(",");
@@ -338,7 +330,7 @@ void checkCommand() {
 		case 'e':	// all configuration data received
 			// this enables setup to continue
 			configurationComplete = true;
-			Serial.println("msg e: configuration data complete");
+			Serial.println(F("msg e: configuration data complete"));
 
 			break;
 
@@ -350,7 +342,7 @@ void checkCommand() {
 			strtokIndx = strtok(NULL, ","); // next item
 			sensorId = atoi(strtokIndx);    // sensorId
 
-			Serial.println("set floor reference distances");
+			Serial.println(F("set floor reference distances"));
 			eepromStartAddr = sensorId * NUM_MEASURE_STEPS;
 
 			for (int swipeStep = 0; swipeStep < NUM_MEASURE_STEPS; swipeStep++) {
@@ -367,17 +359,17 @@ void checkCommand() {
 		case 'v':	// set verbose state v,<0/1>
 			if (receivedChars[2] == '0') {
 				verbose = false;
-				Serial.println("verbose turned off");
+				Serial.println(F("verbose turned off"));
 			}
 			else {
 				verbose = true;
-				Serial.println("verbose turned on");
+				Serial.println(F("verbose turned on"));
 			}
 			break;
 
 
 		default:
-			Serial.print("unknown serial command, mode: "); Serial.println(char(mode));
+			Serial.print(F("unknown serial command, mode: ")); Serial.println(char(mode));
 			break;
 		}
 
