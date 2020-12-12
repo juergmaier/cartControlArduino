@@ -80,6 +80,16 @@ extern bool verbose;
 extern cImu platformImu;
 extern cImu headImu;
 
+extern int remainingDistance;
+extern int remainingTime;
+extern int remainingYaw;
+extern int movementDuration;
+extern int maxDuration;
+extern int delayMillis;
+extern boolean dockingSwitchState;
+extern float distance;
+extern unsigned long counts;
+
 extern void loadFloorReferenceDistances();		//distance.cpp
 
 #endif

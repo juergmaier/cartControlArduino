@@ -124,7 +124,7 @@ extern int loopCount;
 extern irSensorDefinition irSensorDefinitions[];
 extern byte irSensorReferenceDistances[IR_SENSORS_COUNT][NUM_MEASURE_STEPS];
 
-extern byte irSensorStepRaw[IR_SENSORS_COUNT][NUM_REPETITIONS_IR_MEASURE];
+extern int irSensorStepRaw[IR_SENSORS_COUNT][NUM_REPETITIONS_IR_MEASURE];
 
 extern int ultrasonicDistanceSensorValues[ULTRASONIC_DISTANCE_SENSORS_COUNT];
 extern int ultrasonicDistanceSensorValidity;

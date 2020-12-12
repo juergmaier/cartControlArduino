@@ -85,7 +85,7 @@ int distanceDoneWhenBlocked;
 bool reducedSpeed = false;				// flag for using reduced speed by long range sensor obstacle/abyss detection
 
 int MINIMAL_CART_SPEED = 50;			// minimal cart speed 50
-int MAX_WAIT_FOR_FREE_MOVE = 3000;		// after detecting obstacle/abyss try to finish move 
+int MAX_WAIT_FOR_FREE_MOVE = 6000;		// after detecting obstacle/abyss try to finish move 
 
 int moves[11][4]{
 	/* STOP             */{ RELEASE,  RELEASE,  RELEASE,  RELEASE  },
@@ -226,7 +226,7 @@ void trackMoveTime(int currentSpeed, int newSpeed) {
 		partialMoveMillis = millis() - partialMoveStartMillis;
 		Serial.print(F("currentSpeed: ")); Serial.print(currentSpeed);
 		Serial.print(F(", newSpeed: ")); Serial.print(newSpeed);
-		Serial.print(F(", partialMoveMillis: ")); Serial.print(partialMoveMillis);
+		Serial.print(F(", remainingDist: ")); Serial.print(remainingDistance);
 		Serial.println();
 	}
 
@@ -954,11 +954,17 @@ void handleMove(bool newSensorValuesAvailable) {
 		}
 
 		// check for deceleration based on distance moved (may be during acceleration)
-		int remainingDistance = requestedDistance - totalDistanceMoved;
-		int remainingTime = maxMoveMillis - totalPartialMoveMillis - (millis() - partialMoveStartMillis);
+		remainingDistance = requestedDistance - totalDistanceMoved;
+		remainingTime = maxMoveMillis - totalPartialMoveMillis - (millis() - partialMoveStartMillis);
 
-		if ((remainingDistance <= (1.0 * accelerationDistance))
-			|| (remainingTime <= (1.0 * accelerationTime))) {
+		Serial.print(F("handleMove, dist requested: ")); Serial.print(requestedDistance);
+		Serial.print(F(", moved: ")); Serial.print(totalDistanceMoved);
+		Serial.print(F(", remaining: ")); Serial.print(remainingDistance);
+		Serial.print(F(", accelerate: ")); Serial.print(accelerationDistance);
+		Serial.println();
+
+		if ((remainingDistance <= (1.2 * accelerationDistance))
+			|| (remainingTime <= (1.2 * accelerationTime))) {
 			if (speedPhase != DECELERATE) {
 				speedPhase = DECELERATE;
 				if (verbose) Serial.println(F("speedPhase DECELERATE set"));

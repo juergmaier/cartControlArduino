@@ -92,6 +92,17 @@ int _speedUnifyer[MOTORS_COUNT]{ 104,100,96,82 };
 
 int sensorInTest = -1;
 
+int remainingDistance;
+int remainingTime;
+int remainingYaw;
+int movementDuration;
+int maxDuration;
+int delayMillis;
+boolean dockingSwitchState;
+float distance;
+unsigned long counts;
+
+
 // use only 1 interrupt and count the flanks as we know the current direction
 void wheelChange() {
 	wheelPulseCounter += 1;         
@@ -238,16 +249,6 @@ void setup()
 
 void loop()
 {
-	static int remainingDistance;
-	static int remainingTime;
-	static int remainingYaw;
-	static int movementDuration;
-	static int maxDuration;
-	static int delayMillis;
-	static boolean dockingSwitchState;
-	static float distance;
-	static unsigned long counts;
-
 	loopStartMs = millis();
 	loopCount++;
 	
