@@ -46,7 +46,7 @@ extern void stopCart(bool, String);
 
 // drive
 extern void handleCartMovement();
-extern void setInvolvedIrSensors(MOVEMENT plannedCartDirection, bool moveProtected);
+//extern void setInvolvedIrSensors(MOVEMENT plannedCartDirection, bool moveProtected);
 
 extern int checkUltrasonicDistances();
 

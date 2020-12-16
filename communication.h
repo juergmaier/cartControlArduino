@@ -25,10 +25,10 @@ extern int FLOOR_ABYSS_MAX;
 extern int FLOOR_FAR_MIN;
 extern int FLOOR_FAR_MAX;
 
-extern float _speedFactor;
-extern float _speedOffset;
-extern float _speedFactorSideway;
-extern float _speedFactorDiagonal;
+extern float speedFactor;
+extern float speedOffset;
+extern float speedFactorSideway;
+extern float speedFactorDiagonal;
 
 extern int _prevImuYaw;
 extern unsigned long lastOrientationChange;

@@ -6,6 +6,10 @@
 #include "arduino.h"
 #include "bno055.h"
 
+// print macros using F() PROGMEM for text strings
+#define prt(x) Serial.print(F(x))
+#define pr(x) Serial.print(x)
+#define prl(x) Serial.println(x)
 
 #define PIN_TABLE_HEIGHT A13
 #define PIN_TABLE_PWM1 2
@@ -81,7 +85,7 @@ extern cImu platformImu;
 extern cImu headImu;
 
 extern int remainingDistance;
-extern int remainingTime;
+extern int remainingMillis;
 extern int remainingYaw;
 extern int movementDuration;
 extern int maxDuration;

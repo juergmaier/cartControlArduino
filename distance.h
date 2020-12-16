@@ -52,7 +52,7 @@ enum DISTANCE_LIMIT_TYPE { MINIMUM, MAXIMUM };
 enum DISTANCE_SENSOR_TYPE {INFRARED, ULTRASONIC};
 
 typedef struct servoDefinition {
-	int servoID;
+	int servoId;
 	char servoName[3];
 	boolean installed;
 	int servoPin;
@@ -67,7 +67,7 @@ typedef struct irSensorDefinition {
 	bool swipe;
 	bool installed;
 	int sensorPin;
-	int servoID;
+	int servoId;
 } irSensorDefinition;
 
 //typedef struct irSensorSwipeStepDataType {
@@ -125,6 +125,7 @@ extern irSensorDefinition irSensorDefinitions[];
 extern byte irSensorReferenceDistances[IR_SENSORS_COUNT][NUM_MEASURE_STEPS];
 
 extern int irSensorStepRaw[IR_SENSORS_COUNT][NUM_REPETITIONS_IR_MEASURE];
+extern irSensorStepValuesType irSensorStepData[IR_SENSORS_COUNT][NUM_MEASURE_STEPS];
 
 extern int ultrasonicDistanceSensorValues[ULTRASONIC_DISTANCE_SENSORS_COUNT];
 extern int ultrasonicDistanceSensorValidity;

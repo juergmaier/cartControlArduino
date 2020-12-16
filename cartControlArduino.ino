@@ -50,10 +50,10 @@ int _currentTableHeight;
 int _requestedTableHeight;
 TABLE_STATUS _tableStatus;
 
-float _speedFactor = 1.527;
-float _speedOffset = 52.9;
-float _speedFactorSideway = 0.6;
-float _speedFactorDiagonal = 0.7;
+float speedFactor = 1.527;
+float speedOffset = 52.9;
+float speedFactorSideway = 0.6;
+float speedFactorDiagonal = 0.7;
 
 byte platformBnoAddress = 0x28;
 byte headBnoAddress = 0x29;
@@ -93,7 +93,7 @@ int _speedUnifyer[MOTORS_COUNT]{ 104,100,96,82 };
 int sensorInTest = -1;
 
 int remainingDistance;
-int remainingTime;
+int remainingMillis;
 int remainingYaw;
 int movementDuration;
 int maxDuration;

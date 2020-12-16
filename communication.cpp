@@ -22,10 +22,7 @@ void sendImuValues(cImu imu) {
 	long milliRoll = imu.getRoll() * 1000;
 	long milliPitch = imu.getPitch() * 1000;
 
-	Serial.println((String)imu.getId()
-		+ "," + milliYaw
-		+ "," + milliRoll
-		+ "," + milliPitch);
+	pr(imu.getId()); pr(","); pr(milliYaw); pr(","); pr(milliRoll); pr(","); pr(milliPitch); prl();
 }
 
 
@@ -61,14 +58,12 @@ void recvWithEndMarker() {
 
 void checkCommand() {
 
-	String msg;
 	int dir;
 	int speed;
 	int newSpeed;
 	double ox;
-	int servoID;
+	int servoId;
 	int sensorId;
-	String sensorDistance;
 	int testDirection;
 	char msgCopyForParsing[64];
 	char * strtokIndx; // this is used by strtok() as an index
@@ -100,11 +95,7 @@ void checkCommand() {
 
 		// do not log the heartbeat and the orientation query
 		if (mode != '5' && mode != '6' && mode != '9') {
-		//if (mode != '5' && mode != '6') {
-			//if (verbose) {
-			if (true) {
-				Serial.println((String) "new command, mode: " + mode + ", msg: " + receivedChars);
-			}
+			Serial.println((String) "new command, mode: " + mode + ", msg: " + receivedChars);
 		}
 
 		///////////////////////////////////////////////
@@ -157,10 +148,6 @@ void checkCommand() {
 
 		case '3':  // rotate clockwise or right, 3 digits for angle, angle positive
 
-			//msg = receivedChars;
-			//relAngle = msg.substring(2, 5).toInt();
-			//_requestedMaxSpeed = msg.substring(6, 9).toInt();
-
 			strtokIndx = strtok(msgCopyForParsing, ","); // msgId, "3"
 
 			strtokIndx = strtok(NULL, ","); // angle
@@ -193,9 +180,12 @@ void checkCommand() {
 			break;
 
 		case '6':  // set new speed
-			msg = receivedChars;
-			newSpeed = msg.substring(1, 4).toInt();
-			//setCartSpeed(newSpeed);
+
+			strtokIndx = strtok(msgCopyForParsing, ","); // msgId, "7"
+
+			strtokIndx = strtok(NULL, ","); // sensorId
+			newSpeed = atoi(strtokIndx);
+
 			Serial.print(F("set new speed received but ignored: "));
 			Serial.print(newSpeed);
 			Serial.println();
@@ -203,13 +193,15 @@ void checkCommand() {
 
 		case '7':  // test IR sensor
 
+			sensorInTest = 0;
 			strtokIndx = strtok(msgCopyForParsing, ","); // msgId, "7"
+
 			strtokIndx = strtok(NULL, ","); // sensorId
 			sensorInTest = atoi(strtokIndx); 
 
-			Serial.print(F("sensorInTest, Id: ")); Serial.print(sensorInTest);
-			Serial.print(F(", sensorName: ")); Serial.print(irSensorDefinitions[sensorInTest].sensorName);
-			Serial.println();
+			prt("sensorInTest, Id: "); pr(sensorInTest);
+			if (sensorInTest <= 9) prt(", sensorName: "); pr(irSensorDefinitions[sensorInTest].sensorName);
+			prl();
 
 			// set a move direction that includes the sensor to test
 			if (sensorInTest >= 0 && sensorInTest < 3) {
@@ -228,7 +220,11 @@ void checkCommand() {
 				cartDirection = RIGHT;
 				testDuration = 500;
 			}
-
+			if (sensorInTest > 9) {
+				prt("sensor test for invalid ir sensor: "); pr(sensorInTest); prl();
+				sensorInTest = 0;
+				break;
+			}
 			//setPlannedCartMove(MOVEMENT cartAction, int maxSpeed, int dDistance, int duration, bool moveProtected) {
 			setPlannedCartMove(cartDirection, 0, 2000, testDuration, true);
 
@@ -292,16 +288,25 @@ void checkCommand() {
 			break;
 
 		case 'b':	// speed calculation numbers
-			msg = receivedChars;
-			_speedFactor = msg.substring(2, 9).toFloat();
-			_speedOffset = msg.substring(10, 17).toFloat();
-			_speedFactorSideway = msg.substring(18, 23).toFloat();
-			_speedFactorDiagonal = msg.substring(24, 29).toFloat();
 
-			Serial.print(F("msg b: cart speed calculation, factor: ")); Serial.println(_speedFactor);
-			Serial.print(F(" offset: ")); Serial.println(_speedOffset);
-			Serial.print(F(" factor sideway moves: ")); Serial.println(_speedFactorSideway);
-			Serial.print(F(" factor diagonal moves: ")); Serial.println(_speedFactorDiagonal);
+			strtokIndx = strtok(msgCopyForParsing, ","); // msgId, "d"
+
+			strtokIndx = strtok(NULL, ","); // next item
+			speedFactor = atof(strtokIndx);
+
+			strtokIndx = strtok(NULL, ","); // next item			
+			speedOffset = atof(strtokIndx);
+
+			strtokIndx = strtok(NULL, ","); // next item			
+			speedFactorSideway = atof(strtokIndx);
+
+			strtokIndx = strtok(NULL, ","); // next item			
+			speedFactorDiagonal = atof(strtokIndx);
+
+			prt("msg b: cart speed calculation, factor: "); pr(speedFactor); prl();
+			prt(" offset: "); pr(speedOffset); prl();
+			prt(" factor sideway moves: "); pr(speedFactorSideway); prl();
+			prt(" factor diagonal moves: "); pr(speedFactorDiagonal); prl();
 
 			break;
 

@@ -122,17 +122,17 @@ int absAngleDiff(int a, int b) {
 void setInvolvedIrSensors(MOVEMENT plannedCartDirection, bool moveProtected) {
 
 	int sensorId;
-	int servoID;
+	int servoId;
 
 	// reset and update the servo and sensor list for the new cartDirection
 	for (int m = 0; m < SWIPE_SERVOS_COUNT; m++) { servoInvolved[m] = false; }
 	//for (int s = 0; s < FLOOR_SENSORS_COUNT; s++) { sensorInvolved[s] = false; }
 
 	if (verbose && sensorInTest > -1) {
-		Serial.print(F("sensorInTest: ")); Serial.print(sensorInTest);
+		prt("sensorInTest: "); pr(sensorInTest);
 	}
 	if (verbose) {
-		Serial.print(F("sensors involved: "));
+		Serial.print(F(", sensors involved: "));
 		Serial.print(MOVEMENT_NAMES[plannedCartDirection]);
 	}
 
@@ -140,7 +140,8 @@ void setInvolvedIrSensors(MOVEMENT plannedCartDirection, bool moveProtected) {
 
 		// build the array of the infrared sensors involved in the planned move
 		numInvolvedIrSensors = 0;
-		
+		bool initialAnalogReadDone = false;
+
 		for (int s = 0; s < MAX_INVOLVED_IR_SENSORS; s++) {
 
 			// for each direction the set of sensors involved is predefined
@@ -152,9 +153,9 @@ void setInvolvedIrSensors(MOVEMENT plannedCartDirection, bool moveProtected) {
 				// for swiping sensors get the servoId used for swiping
 				// for static sensors the servoId is defined as -1
 				// a sensor might in addition currently be unavailable (not installed)
-				servoID = irSensorDefinitions[sensorId].servoID;
-				if (servoID > -1) {
-					servoInvolved[servoID] = true;
+				servoId = irSensorDefinitions[sensorId].servoId;
+				if (servoId > -1) {
+					servoInvolved[servoId] = true;
 				}
 		
 				// check for sensor installed, that we are not in a sensor test
@@ -162,6 +163,13 @@ void setInvolvedIrSensors(MOVEMENT plannedCartDirection, bool moveProtected) {
 				if (irSensorDefinitions[sensorId].installed) {
 					if (sensorInTest == -1 || sensorId == sensorInTest) {
 						involvedIrSensors[numInvolvedIrSensors] = sensorId;
+
+						// for the first involved sensor run a few analog reads to adjust to distance
+						for (int i = 0; i < IR_MIN_READS_TO_ADJUST; i++){
+							analogRead(irSensorDefinitions[sensorId].sensorPin);
+							delayMicroseconds(600);
+						}
+
 						numInvolvedIrSensors++;
 						if (verbose) {
 							Serial.print(", ");
@@ -242,6 +250,7 @@ void trackMoveTime(int currentSpeed, int newSpeed) {
 			Serial.print(F("cart stopped"));
 			Serial.print(F(", currentSpeed: ")); Serial.print(currentSpeed);
 			Serial.print(F(", newSpeed: ")); Serial.print(newSpeed);
+			Serial.println();
 		}
 	}
 	return;
@@ -338,7 +347,7 @@ void setPlannedCartMove(MOVEMENT newCartAction, int newMaxSpeed, int newDistance
 	Serial.println();
 
 	setInvolvedIrSensors(newCartAction, moveProtected);
-	swipeStepStartMillis = 0;
+	swipeStepStartMillis = millis();
 
 	// use the encoder counter to measure distance travelled
 	noInterrupts();
@@ -364,7 +373,7 @@ void setPlannedCartRotation(MOVEMENT newCartAction, int newMaxSpeed, int newAngl
 	driftCompensationRight = 0.95;
 
 	setInvolvedIrSensors(newCartAction, moveProtected);
-	swipeStepStartMillis = 0;
+	swipeStepStartMillis = millis();
 
 	if (true) {
 		Serial.print(F("cartRotation: "));
@@ -385,11 +394,17 @@ void logIrObstacle(int obstacleHeight, int limit, int sensorId) {
 	if (moveStatus != OBSTACLE) {		// do not repeat messages
 
 		// log message of obstacle (free text)
-		Serial.print(F("obstacle detected by infrared sensor, "));
+		Serial.print(F("obstacle detected by ir sensor, "));
 		Serial.print(F("height: ")); Serial.print(obstacleHeight);
 		Serial.print(F(" > limit: ")); Serial.print(limit);
 		Serial.print(F(", sensor: ")); Serial.print(getIrSensorName(sensorId));
 		Serial.println();
+
+		prt("dist: ");
+		for (int step = 0; step < NUM_MEASURE_STEPS; step++) {
+			pr(irSensorStepData[sensorId][step].distMm);prt(", ");
+		}
+		prl();
 
 		// message to cart control (structured)
 		Serial.print("!S1,"); Serial.print(obstacleHeight);
@@ -413,6 +428,12 @@ void logIrAbyss(int abyssDepth, int limit, int sensorId) {
 		Serial.print(F(" > limit: ")); Serial.print(limit);
 		Serial.print(F(", sensor: ")); Serial.print(getIrSensorName(sensorId));
 		Serial.println();
+
+		prt("dist: ");
+		for (int step = 0; step < NUM_MEASURE_STEPS; step++) {
+			pr(irSensorStepData[sensorId][step].distMm);prt(", ");
+		}
+		prl();
 
 		// message to cart control (structured)
 		Serial.print("!S2,"); Serial.print(abyssDepth);
@@ -750,7 +771,7 @@ void handleRotation(bool newSensorValuesAvailable) {
 			activeCartMovement = plannedCartMovement;
 		}
 
-		// check for acceleration/deceleration phase
+		// check for acceleration/deceleration phase in rotation
 		if (speedPhase == ACCELERATE) {
 
 			// increase speed
@@ -788,10 +809,10 @@ void handleRotation(bool newSensorValuesAvailable) {
 
 		// check for deceleration
 		int remainingAngle = absAngleDiff(requestedAngle, totalAngleMoved);
-		int remainingTime = maxMoveMillis - totalPartialMoveMillis - (millis() - partialMoveStartMillis);
+		int remainingMillis = maxMoveMillis - totalPartialMoveMillis - (millis() - partialMoveStartMillis);
 
 		if ((remainingAngle <= (1.0 * accelerationAngle))
-			|| (remainingTime <= (1.0 * accelerationTime))) {
+			|| (remainingMillis <= (1.0 * accelerationTime))) {
 			if (speedPhase != DECELERATE) {
 				speedPhase = DECELERATE;
 				if (verbose) Serial.println(F("speedPhase DECELERATE set"));
@@ -897,6 +918,9 @@ void handleMove(bool newSensorValuesAvailable) {
 		return;
 	}
 
+	// check for sensor test, do not move in sensor test mode
+	if (sensorInTest > -1) return;
+
 	// with new sensor values available check for free move
 	if (newSensorValuesAvailable) {
 		freeMove = (freeMoveAvailable(plannedCartMovement) || !moveProtected);
@@ -922,7 +946,10 @@ void handleMove(bool newSensorValuesAvailable) {
 
 		activeCartMovement = plannedCartMovement;
 
-		// check for speed phase accelerate
+		remainingDistance = requestedDistance - totalDistanceMoved;
+		remainingMillis = maxMoveMillis - totalPartialMoveMillis - (millis() - partialMoveStartMillis);
+
+		// check for speed phase accelerate in move
 		if (speedPhase == ACCELERATE) {
 
 			// increase speed
@@ -936,7 +963,9 @@ void handleMove(bool newSensorValuesAvailable) {
 				accelerationTime = millis() - partialMoveStartMillis;
 
 				// check for end of acceleration phase
-				if (cartSpeed >= requestedMaxSpeed) {
+				// this is either reaching the max speed or when the remaining distance to drive
+				// is less than 60 mm
+				if (cartSpeed >= requestedMaxSpeed || remainingDistance < 60) {
 					speedPhase = CRUISE;
 					if (verbose) Serial.println(F("speedPhase CRUISE set"));
 
@@ -953,21 +982,24 @@ void handleMove(bool newSensorValuesAvailable) {
 			}
 		}
 
-		// check for deceleration based on distance moved (may be during acceleration)
-		remainingDistance = requestedDistance - totalDistanceMoved;
-		remainingTime = maxMoveMillis - totalPartialMoveMillis - (millis() - partialMoveStartMillis);
-
 		Serial.print(F("handleMove, dist requested: ")); Serial.print(requestedDistance);
 		Serial.print(F(", moved: ")); Serial.print(totalDistanceMoved);
 		Serial.print(F(", remaining: ")); Serial.print(remainingDistance);
 		Serial.print(F(", accelerate: ")); Serial.print(accelerationDistance);
 		Serial.println();
 
-		if ((remainingDistance <= (1.2 * accelerationDistance))
-			|| (remainingTime <= (1.2 * accelerationTime))) {
+		// slow cart down conditions:
+		if ((remainingDistance < accelerationDistance) 
+			|| (remainingMillis < maxMoveMillis - 500)) {
 			if (speedPhase != DECELERATE) {
 				speedPhase = DECELERATE;
-				if (verbose) Serial.println(F("speedPhase DECELERATE set"));
+				if (verbose) {
+					Serial.print(F("speedPhase DECELERATE set, dist remaining:")); Serial.print(remainingDistance);
+					Serial.print(F(", accel: ")); Serial.print(accelerationDistance);
+					Serial.print(F(", cartSpeed: ")); Serial.print(cartSpeed);
+					Serial.print(F(", rem.Millis: ")); Serial.print(remainingMillis);
+					Serial.println();
+				}
 			}
 		}
 
