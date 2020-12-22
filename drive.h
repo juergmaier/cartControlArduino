@@ -6,19 +6,12 @@
 #include "arduino.h"
 #include "distance.h"
 
-extern char receivedChars[64];
-extern int numChars;
-extern int targetYaw;
-//extern boolean inRotation;
-
-
 //given by cartControl with message 0
 extern int FLOOR_MAX_OBSTACLE;
 extern int FLOOR_MAX_ABYSS;
 
-extern unsigned long _last12VCheckMillis;
-extern int _mVolts;
-extern volatile unsigned long wheelPulseCounter;
+extern unsigned long last12VCheckMillis;
+
 extern unsigned long moveRequestReceivedMillis;
 
 extern int MIN_MEASURE_CYCLE_DURATION;
@@ -29,8 +22,9 @@ extern int numInvolvedIrSensors;
 
 enum MOTORS { MOTOR_FRONT_RIGHT, MOTOR_FRONT_LEFT, MOTOR_BACK_RIGHT, MOTOR_BACK_LEFT, MOTORS_COUNT };
 enum SPEED_PHASE {ACCELERATE, CRUISE, DECELERATE};
+enum MOVE_TYPE {STRAIGHT, ROTATE, SENSORTEST};
 extern int _speedUnifyer[MOTORS_COUNT];
-
+extern MOVE_TYPE moveType;
 
 // initialise move
 extern void setupFahren();

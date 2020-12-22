@@ -51,38 +51,62 @@ MOVEMENT activeCartMovement;
 // request variables for move
 MOVEMENT plannedCartMovement;
 int requestedMaxSpeed;					// allowed max speed
-long maxMoveMillis;					// max allowed duration for move
-int requestedDistance;					// distance to move
+
 bool moveProtected;						// for docking or close encounter with objects suppress collision detection
+
+// request variables for rotation
+int requestedAngle;						// angle to rotate
+//int accelerationAngle;					// angle used for acceleration to max speed
+//int angleDoneWhenBlocked;
+//int distanceDoneWhenBlocked;
+bool proceedWithReducedSpeed = false;	// flag for using reduced speed by long range sensor obstacle/abyss detection
 
 // actual variables for move
 int cartSpeed;
-int totalDistanceMoved;			// total distance in current move
-int totalAngleMoved;			// total angle moved in current move
-int partialDistanceMoved;		// distance since cart last stopped
-int accelerationDistance;
-int accelerationTime;
-long partialMoveMillis;		// total millis of current movement
-long totalPartialMoveMillis;		// sum of partialMoveMillis not including movement in progress
 SPEED_PHASE speedPhase;
-unsigned long partialMoveStartMillis;		
-unsigned long moveRequestReceivedMillis;		// millis when move request received
-unsigned long blockedMoveMillis;				// millis when cart stopped
-bool freeMove;
+MOVE_TYPE moveType;
+
+// a move can be interrupted by detecting obstacles or abyss
+// the cart will try to finish the requested distance/angle move within the max time allowed for the move
+// the distance/time moved is accumulated with any early stop in the move
+// so we have a current partial move and the sum of the done partial moves 
+// for current partial move keep record of its acceleration distance and time
+// this allows for a deceleration of the cart analoguos to the acceleration
+unsigned long partialMoveStartMillis;	// start of current partial move	
+int requestedDistance;					// distance to move
+int sumDonePartialDistances;			// distance in previous partial moves
+int partialMoveDistance;				// distance in current partial move
+int remainingMoveDistance;
+
+int requestedMoveAngle;					// rel angle
+int partialMoveStartAngle;				// abs angle
+int partialMoveAngle;					// rel angle rotated in current partial move
+int sumDonePartialAngles;				// rel angle rotated in previous partial moves
+int remainingMoveAngle;					// rel angle to target
+
+int maxMoveMillis;						// max allowed duration for move (when speed > 0)
+int partialMoveMillis;					// millis in current partial move
+int sumDonePartialMoveMillis;			// millis in previous partial moves
+int remainingMoveMillis;				// 
+
+int accelerationDistance;				// distance in acceleration phase in current partial move
+int accelerationAngle;					// angle in acceleration phase in current partial move
+int accelerationMillis;		// millis in acceleration mode in current partial move
+
+// millis when move request received, this allows for easier sequence detection in the logs
+unsigned long moveRequestReceivedMillis;		
+unsigned long blockedMoveMillis;		// millis when cart last stopped, to terminate move when blocked
+bool freeMove;							// a flag for no obstacle/abyss detected by the sensors
 bool newSensorValuesAvailable;
 
+// cart moves can be non-straight when wheel speed differences or slides occur
+// try to adjust the wheel speeds to get a straight move (platform imu will show drifts)
 int imuYawStart = platformImu.getYaw();			// for rotation end and drift detection/correction during move
 int prevDriftCheckDistance;
 float driftCompensationLeft = 1.0;
 float driftCompensationRight = 0.95;
 unsigned long lastPositionSentMillis;
 
-// request variables for rotation
-int requestedAngle;						// angle to rotate
-int accelerationAngle;					// angle used for acceleration to max speed
-int angleDoneWhenBlocked;
-int distanceDoneWhenBlocked;
-bool reducedSpeed = false;				// flag for using reduced speed by long range sensor obstacle/abyss detection
 
 int MINIMAL_CART_SPEED = 50;			// minimal cart speed 50
 int MAX_WAIT_FOR_FREE_MOVE = 6000;		// after detecting obstacle/abyss try to finish move 
@@ -126,14 +150,12 @@ void setInvolvedIrSensors(MOVEMENT plannedCartDirection, bool moveProtected) {
 
 	// reset and update the servo and sensor list for the new cartDirection
 	for (int m = 0; m < SWIPE_SERVOS_COUNT; m++) { servoInvolved[m] = false; }
-	//for (int s = 0; s < FLOOR_SENSORS_COUNT; s++) { sensorInvolved[s] = false; }
 
-	if (verbose && sensorInTest > -1) {
-		prt("sensorInTest: "); pr(sensorInTest);
+	if (moveType == SENSORTEST) {
+		prt("sensorInTest: "); prl(sensorInTest);
 	}
 	if (verbose) {
-		Serial.print(F(", sensors involved: "));
-		Serial.print(MOVEMENT_NAMES[plannedCartDirection]);
+		prt(", sensors involved: "); pr(MOVEMENT_NAMES[plannedCartDirection]);
 	}
 
 	if (moveProtected) {
@@ -147,7 +169,7 @@ void setInvolvedIrSensors(MOVEMENT plannedCartDirection, bool moveProtected) {
 			// for each direction the set of sensors involved is predefined
 			sensorId = directionSensorAssignment[plannedCartDirection][s];
 
-			// for a sensor not involved the value FLOOR_SENSORS_COUNT is set in the table
+			// for a sensor not involved the value IR_SENSORS_COUNT is set in the table
 			if (sensorId != IR_SENSORS_COUNT) {
 
 				// for swiping sensors get the servoId used for swiping
@@ -161,7 +183,7 @@ void setInvolvedIrSensors(MOVEMENT plannedCartDirection, bool moveProtected) {
 				// check for sensor installed, that we are not in a sensor test
 				// and if in sensor test that the loop is at the sensor to test
 				if (irSensorDefinitions[sensorId].installed) {
-					if (sensorInTest == -1 || sensorId == sensorInTest) {
+					if (moveType != SENSORTEST || sensorId == sensorInTest) {
 						involvedIrSensors[numInvolvedIrSensors] = sensorId;
 
 						// for the first involved sensor run a few analog reads to adjust to distance
@@ -179,10 +201,10 @@ void setInvolvedIrSensors(MOVEMENT plannedCartDirection, bool moveProtected) {
 				}
 			}
 		}
-		if (verbose) Serial.println();
+		if (verbose) prl();
 
 		// for protected forward move include the ultrasonic sensors
-		if (plannedCartDirection == FORWARD) {
+		if (plannedCartDirection == FORWARD && moveType == STRAIGHT) {
 			Wire.beginTransmission(ULTRASONIC_DISTANCE_DEVICE_I2C_ADDRESS);
 			Wire.write(1);
 			Wire.endTransmission();
@@ -191,69 +213,6 @@ void setInvolvedIrSensors(MOVEMENT plannedCartDirection, bool moveProtected) {
 			}
 		}
 	}
-}
-
-
-
-/* track cart move time(s)
-The cart can be requested to drive a certain distance or rotate a certain angle within
-a given active move time.
-Cart movement can be blocked by obstacles and abyss.
-In case of a blocked move (cart stopped but total allowed move time and/or distance not reached) 
-the software tries to continue the partially done move.
-This is the place where partial move times and total move time are taken care of
-*/
-void trackMoveTime(int currentSpeed, int newSpeed) {
-
-	// handle the different cases
-	// check for initialize command of for this move
-	if (newSpeed == -1) {
-		totalPartialMoveMillis = 0;
-		partialMoveMillis = 0;
-		distanceDoneWhenBlocked = 0;
-		angleDoneWhenBlocked = 0;
-		return;
-	}
-
-	// after cart blocked free room for move detected
-	// current cart speed == 0 and new Speed > 0
-	if (currentSpeed == 0 && newSpeed > 0) {
-		partialMoveStartMillis = millis();
-		if (totalPartialMoveMillis > 0) {
-			// continuation of partially done move, init partial move variables
-			partialMoveMillis = 0;
-			Serial.println(F("continue move"));
-		}
-		else {
-			Serial.println(F("start move"));
-		}
-	}
-
-	// cart is moving, keep track of progress
-	if (currentSpeed > 0 && newSpeed > 0) {
-		partialMoveMillis = millis() - partialMoveStartMillis;
-		Serial.print(F("currentSpeed: ")); Serial.print(currentSpeed);
-		Serial.print(F(", newSpeed: ")); Serial.print(newSpeed);
-		Serial.print(F(", remainingDist: ")); Serial.print(remainingDistance);
-		Serial.println();
-	}
-
-	// cart requested to stop
-	if (currentSpeed > 0 && newSpeed == 0) {
-		partialMoveMillis = millis() - partialMoveStartMillis;
-		totalPartialMoveMillis += partialMoveMillis;
-		partialMoveMillis = 0;
-		blockedMoveMillis = millis();
-
-		if (verbose) {
-			Serial.print(millis() - moveRequestReceivedMillis); Serial.print(", ");
-			Serial.print(F("cart stopped"));
-			Serial.print(F(", currentSpeed: ")); Serial.print(currentSpeed);
-			Serial.print(F(", newSpeed: ")); Serial.print(newSpeed);
-			Serial.println();
-		}
-	}
-	return;
 }
 
 
@@ -267,18 +226,15 @@ void applyCartSpeed() {
 	if (cartSpeed > 0) {
 
 		// check for cart speed request in sensor test mode
-		if (sensorInTest > -1) {
-			Serial.print(F("PREVENTED SPEED SETTING DURING SENSORTEST"));
-			Serial.print(cartSpeed);
-			Serial.println();
+		if (moveType == SENSORTEST) {
+			prt("PREVENTED SPEED SETTING DURING SENSORTEST"); prl(cartSpeed);
 			return;
 		}
 
 	}	
 	if (verbose) {
 		Serial.print(millis() - moveRequestReceivedMillis);
-		Serial.print(F(" ms, new speed: "));
-		Serial.println(cartSpeed);
+		prt(" ms, new speed: "); prl(cartSpeed);
 	}
 
 	fl->setSpeed(round(cartSpeed * _speedUnifyer[MOTOR_FRONT_LEFT] / 100) * driftCompensationLeft);
@@ -304,16 +260,15 @@ void applyCartSpeed() {
 
 
 	// check for 12V Voltage about every Minute while cart is moving
-	if (millis() - _last12VCheckMillis > 60000) {
+	if (millis() - last12VCheckMillis > 60000) {
 		int rawValue = analogRead(PIN_A15);
-		//_mVolts = int((rawValue / 1024.0) * 5000); // Gets you mV
-		_mVolts = int((rawValue / 256.0) * 5000); // Gets you mV
-		_last12VCheckMillis = millis();
+		int mVolts = int((rawValue / 256.0) * 5000); // Gets you mV
+		last12VCheckMillis = millis();
 
 		// send info to cart control
 		Serial.println();
 		Serial.print("!B0,");
-		Serial.print(_mVolts);
+		Serial.print(mVolts);
 		Serial.println();
 	}
 }
@@ -324,6 +279,7 @@ void setPlannedCartMove(MOVEMENT newCartAction, int newMaxSpeed, int newDistance
 
 	moveRequestReceivedMillis = millis();
 	plannedCartMovement = newCartAction;
+	activeCartMovement = STOP;
 	requestedMaxSpeed = newMaxSpeed;
 	requestedDistance = newDistance;
 	maxMoveMillis = newDuration;
@@ -331,8 +287,12 @@ void setPlannedCartMove(MOVEMENT newCartAction, int newMaxSpeed, int newDistance
 	blockedMoveMillis = millis();
 	freeMove = false;
 	
-	totalDistanceMoved = 0;
-	trackMoveTime(0, -1);		// initialize movement time tracking
+	sumDonePartialDistances = 0;
+	partialMoveDistance = 0;
+	sumDonePartialAngles = 0;
+	partialMoveAngle = 0;
+	sumDonePartialMoveMillis = 0;
+	partialMoveMillis = 0;
 	imuYawStart = platformImu.getYaw();		// for rotation and drift detection/correction
 	prevDriftCheckDistance = 0;
 	driftCompensationLeft = 1.0;
@@ -349,24 +309,28 @@ void setPlannedCartMove(MOVEMENT newCartAction, int newMaxSpeed, int newDistance
 	setInvolvedIrSensors(newCartAction, moveProtected);
 	swipeStepStartMillis = millis();
 
-	// use the encoder counter to measure distance travelled
-	noInterrupts();
-	wheelPulseCounter = 0;
-	interrupts();
 }
 
 void setPlannedCartRotation(MOVEMENT newCartAction, int newMaxSpeed, int newAngle, int maxDuration) {
 
 	moveRequestReceivedMillis = millis();
 	plannedCartMovement = newCartAction;
+	activeCartMovement = STOP;
 	requestedMaxSpeed = newMaxSpeed;
 	requestedAngle = newAngle;
 	maxMoveMillis = maxDuration;
-	moveProtected = false;
+	moveProtected = true;
 	blockedMoveMillis = millis();
 	freeMove = false;
 
-	trackMoveTime(0, -1);		// initialize move duration tracking variables
+	sumDonePartialDistances = 0;
+	partialMoveDistance = 0;
+	sumDonePartialAngles = 0;
+	partialMoveAngle = 0;
+	sumDonePartialMoveMillis = 0;
+	partialMoveMillis = 0;
+	imuYawStart = platformImu.getYaw();		// for rotation and drift detection/correction
+
 	imuYawStart = platformImu.getYaw();		// for rotation and drift detection/correction
 	prevDriftCheckDistance = 0;
 	driftCompensationLeft = 1.0;
@@ -475,44 +439,55 @@ void logUsObstacle(int obstacleDistance, int limit, int sensorId) {
 
 
 // calculate total distance driven
-void updateDistanceMoved() {
+void updateDistanceAngleMillisMoved() {
 
-	// in rotation we do not move
-	if ((activeCartMovement == ROTATE_CLOCKWISE) || (activeCartMovement == ROTATE_COUNTERCLOCK)) {
+	partialMoveMillis = millis() - partialMoveStartMillis;
+	remainingMoveMillis = maxMoveMillis - sumDonePartialMoveMillis - partialMoveMillis;
 
-		totalDistanceMoved = 0;
-		return;
-	}
+	prt("updateDist.. partialMoveMillis: "); pr(partialMoveMillis);
+	prt(", sumDonePartialMoveMillis: "); pr(sumDonePartialMoveMillis);
+	prl();
 
-	// for moves use the encoder input
+	// for distance use the encoder input ...
 	noInterrupts();
 	unsigned long counts = wheelPulseCounter;
 	interrupts();
 
-	totalDistanceMoved = int(counts / PULS_PER_MM_STRAIGHT);
+	if ((activeCartMovement == FORWARD) ||
+		(activeCartMovement == BACKWARD)) {
+		partialMoveDistance = int(counts / PULS_PER_MM_STRAIGHT);
+	}
 
+	// ... and calc dist based on direction of move
 	if ((activeCartMovement == LEFT) ||
 		(activeCartMovement == RIGHT)) {
-		totalDistanceMoved = int(counts / PULS_PER_MM_SIDEWAYS);
+		partialMoveDistance = int(counts / PULS_PER_MM_SIDEWAYS);
 	}
 
 	if ((activeCartMovement == BACK_DIAG_LEFT) ||
 		(activeCartMovement == BACK_DIAG_RIGHT) ||
 		(activeCartMovement == FOR_DIAG_LEFT) ||
 		(activeCartMovement == FOR_DIAG_RIGHT)) {
-		totalDistanceMoved = int(counts / PULS_PER_MM_DIAGONAL);
+		partialMoveDistance = int(counts / PULS_PER_MM_DIAGONAL);
 	}
-	partialDistanceMoved = totalDistanceMoved - distanceDoneWhenBlocked;
+	remainingMoveDistance = requestedDistance - sumDonePartialDistances - partialMoveDistance;
 
 	if (verbose) {
-		Serial.print(millis() - moveRequestReceivedMillis);
-		Serial.print(F(", total dist moved: "));
-		Serial.print(totalDistanceMoved);
-		Serial.print(F(", activeCartMovement: "));
-		Serial.print(MOVEMENT_NAMES[activeCartMovement]);
-		Serial.print(F(", encoder counts: "));
-		Serial.print(counts);
-		Serial.println();
+		pr(millis() - moveRequestReceivedMillis);
+		prt(", encoder counts: ");	Serial.print(counts);
+		prt(", activeCartMovement: "); pr(MOVEMENT_NAMES[activeCartMovement]);
+		prt(", partial dist moved: "); pr(partialMoveDistance);		
+		prl();
+	}
+
+	// for angle use the platform imu and calc abs angle difference
+	partialMoveAngle = absAngleDiff(partialMoveStartAngle, platformImu.getYaw());
+	remainingMoveAngle = requestedMoveAngle - sumDonePartialAngles - partialMoveAngle;
+
+	if (speedPhase == ACCELERATE) {
+		accelerationDistance = partialMoveDistance;
+		accelerationAngle = partialMoveAngle;
+		accelerationMillis = millis() - partialMoveStartMillis;
 	}
 
 }
@@ -578,7 +553,6 @@ bool freeMoveAvailable(MOVEMENT moveDirection) {
 
 	// check for current irSensor distance data
 	if (!isIrSensorDataCurrent()) {
-		moveStatus = STOPPED;
 		if (cartSpeed > 0) {
 			stopCart(false, "no current data from ir sensors");
 		}
@@ -626,7 +600,7 @@ bool freeMoveAvailable(MOVEMENT moveDirection) {
 
 		// reset distance to drive into dock to configured value
 		inFinalDockingMove = true;
-		requestedDistance = totalDistanceMoved + finalDockingMoveDistance;
+		requestedDistance = sumDonePartialDistances + finalDockingMoveDistance;
 
 		Serial.print(F("docking switch activated, continue FORWARD for "));
 		Serial.print(finalDockingMoveDistance);
@@ -652,29 +626,35 @@ bool freeMoveAvailable(MOVEMENT moveDirection) {
 void stopCart(bool moveDone, String reason) {
 
 	if (verbose) {
-		Serial.print(F("stopCart, moveDone: "));
-		Serial.print(moveDone);
-		Serial.print(F(" reason: "));
-		Serial.println(reason);
+		prt("stopCart, moveDone: "); pr(moveDone);
+		prt(" reason: "); pr(reason);
+		prl();
 	}
 
-	int newSpeed = 0;
-	trackMoveTime(cartSpeed, newSpeed);
-	cartSpeed = newSpeed;
+	if (cartSpeed > 0) {
 
-	distanceDoneWhenBlocked = totalDistanceMoved;
-	angleDoneWhenBlocked = totalAngleMoved;
+		// stop the wheel motors
+		cartSpeed = 0;
+		applyCartSpeed();
+
+		sumDonePartialDistances += partialMoveDistance;
+		partialMoveDistance = 0;
+		sumDonePartialAngles += partialMoveAngle;
+		partialMoveAngle = 0;
+		sumDonePartialMoveMillis += partialMoveMillis;
+		partialMoveMillis = 0;
+		blockedMoveMillis = millis();
+
+	}
 
 	activeCartMovement = STOP;
-	sensorInTest = -1;
+	moveStatus = STOPPED;
 
 	if (moveDone) {
 
 		// move done, stop swiping and log distance
 		stopSwipe();
-		//maxMoveDuration = 0;
 		inFinalDockingMove = false;
-		//Serial.println("move done");
 
 		// stop measuring ultrasonic front distances
 		Wire.beginTransmission(ULTRASONIC_DISTANCE_DEVICE_I2C_ADDRESS);
@@ -693,7 +673,7 @@ void stopCart(bool moveDone, String reason) {
 		else {
 			Serial.println((String)"!S5,"
 				+ int(platformImu.getYaw())
-				+ "," + totalDistanceMoved
+				+ "," + sumDonePartialDistances
 				+ "," + reason);
 		}
 
@@ -707,42 +687,33 @@ void stopCart(bool moveDone, String reason) {
 void handleRotation(bool newSensorValuesAvailable) {
 
 	if (verbose) {
-		Serial.println(F("handle rotation"));
+		prtl("handle rotation");
 	}
 
-	totalAngleMoved = absAngleDiff(platformImu.getYaw(), imuYawStart);
-	if (verbose) {
-		Serial.print(F("angle moved: "));
-		Serial.print(totalAngleMoved);
-		Serial.println();
+	//totalAngleMoved = absAngleDiff(platformImu.getYaw(), imuYawStart);
+	//if (verbose) {
+	//	Serial.print(F("angle moved: "));
+	//	Serial.print(totalAngleMoved);
+	//	Serial.println();
+	//}
+
+	if (verbose && remainingMoveAngle > 0) {
+		prt("angleMoved: "); pr(sumDonePartialAngles + partialMoveAngle);
+		prt(", imuYaw: "); pr(platformImu.getYaw());
+		prt(", _startYaw: "); pr(imuYawStart);
+		prl();
 	}
 
-	if (verbose && totalAngleMoved > 0) {
-		Serial.print(F("angleMoved: "));
-		Serial.print(totalAngleMoved);
-		Serial.print(F(", imuYaw: "));
-		Serial.print(platformImu.getYaw());
-		Serial.print(F(", _startYaw: "));
-		Serial.print(imuYawStart);
-		Serial.println();
-
-		Serial.print(F("check rotation done, angleMoved: "));
-		Serial.print(totalAngleMoved);
-		Serial.print(F(", requestedAngle: "));
-		Serial.print(requestedAngle);
-		Serial.println();
-	}
-
-	if (abs(requestedAngle) - totalAngleMoved < 1) {
+	if (abs(requestedAngle) - sumDonePartialAngles - partialMoveAngle < 1) {
 		stopCart(true, "rotation done");
 		int imuYawEnd = platformImu.getYaw();
 		Serial.print("!P2,"); Serial.println(imuYawEnd);
 
-		Serial.print(F(" stop rotation, imuYawStart: ")); Serial.print(imuYawStart);
-		Serial.print(F(", requested angle: ")); Serial.print(requestedAngle);
-		Serial.print(F(", angle moved: ")); Serial.print(totalAngleMoved);
-		Serial.print(F(", imuYawEnd: ")); Serial.print(imuYawEnd);
-		Serial.println();
+		prt(" stop rotation, imuYawStart: "); pr(imuYawStart);
+		prt(", requested angle: "); pr(requestedAngle);
+		prt(", angle moved: "); pr(sumDonePartialAngles);
+		prt(", imuYawEnd: "); pr(imuYawEnd);
+		prl();
 
 		return;
 	}
@@ -760,13 +731,19 @@ void handleRotation(bool newSensorValuesAvailable) {
 		// check for cart currently stopped
 		if (cartSpeed == 0) {
 
+			// start new partial move
+			//partialMoveDistance = 0;
+			//partialMoveAngle = 0;
+			//partialMoveMillis = 0;
+			partialMoveStartMillis = millis();
+			
 			// start with minimal speed and speedPhase ACCELERATE
-			trackMoveTime(cartSpeed, MINIMAL_CART_SPEED);
+			//trackMoveTime(cartSpeed, MINIMAL_CART_SPEED);
 			speedPhase = ACCELERATE;
+			cartSpeed = MINIMAL_CART_SPEED;
 			if (verbose) {
-				Serial.print(F("cartSpeed: "));
-				Serial.print(cartSpeed);
-				Serial.println(F(", speedPhase ACCELERATE set"));
+				prt("cartSpeed: "); pr(cartSpeed);
+				prtl(", speedPhase ACCELERATE set");
 			}
 			activeCartMovement = plannedCartMovement;
 		}
@@ -778,41 +755,31 @@ void handleRotation(bool newSensorValuesAvailable) {
 			if (cartSpeed < requestedMaxSpeed) {
 				// use a ramp to set new speed based on distance driven
 				// adjust by multiplying totalDistanceMoved with a reducing/increasing factor
-				int newSpeed = min(MINIMAL_CART_SPEED + partialDistanceMoved, requestedMaxSpeed);
-				trackMoveTime(cartSpeed, newSpeed);
+				int newSpeed = min(MINIMAL_CART_SPEED + partialMoveDistance, requestedMaxSpeed);
+				//trackMoveTime(cartSpeed, newSpeed);
 				cartSpeed = newSpeed;
-
-				// keep track of acceleration to be used in deceleration
-				accelerationAngle = totalAngleMoved;
-				accelerationTime = millis() - partialMoveStartMillis;
 
 				// check for end of acceleration phase
 				if (cartSpeed >= requestedMaxSpeed) {
 					speedPhase = CRUISE;
-					trackMoveTime(cartSpeed, requestedMaxSpeed);
+					//trackMoveTime(cartSpeed, requestedMaxSpeed);
 					cartSpeed = requestedMaxSpeed;
 
-					if (verbose) Serial.println(F("speedPhase CRUISE set"));
+					if (verbose) prtl("speedPhase CRUISE set");
 
 					if (verbose) {
-						Serial.print(F("acceleration done, cartSpeed: "));
-						Serial.print(cartSpeed);
-						Serial.print(F(", acceleration angle: "));
-						Serial.print(accelerationAngle);
-						Serial.print(F(", acceleration time: "));
-						Serial.print(accelerationTime);
-						Serial.println();
+						prt("acceleration done, cartSpeed: "); pr(cartSpeed);
+						prt(", acceleration angle: "); pr(accelerationAngle);
+						prt(", acceleration time: "); pr(accelerationMillis);
+						prl();
 					}
 				}
 			}
 		}
 
-		// check for deceleration
-		int remainingAngle = absAngleDiff(requestedAngle, totalAngleMoved);
-		int remainingMillis = maxMoveMillis - totalPartialMoveMillis - (millis() - partialMoveStartMillis);
-
-		if ((remainingAngle <= (1.0 * accelerationAngle))
-			|| (remainingMillis <= (1.0 * accelerationTime))) {
+		// check for deceleration in Rotation
+		if ((remainingMoveAngle <= (1.0 * accelerationAngle))
+			|| (remainingMoveMillis <= (1.0 * accelerationMillis))) {
 			if (speedPhase != DECELERATE) {
 				speedPhase = DECELERATE;
 				if (verbose) Serial.println(F("speedPhase DECELERATE set"));
@@ -826,7 +793,7 @@ void handleRotation(bool newSensorValuesAvailable) {
 			}
 			if (verbose) {
 				Serial.print(F("decelerate remaining angle: "));
-				Serial.print(remainingAngle);
+				Serial.print(remainingMoveAngle);
 				Serial.print(F(", cartSpeed: "));
 				Serial.print(cartSpeed);
 				Serial.println();
@@ -847,7 +814,7 @@ void handleDrift() {
 	// left or right wheel speed
 	if (activeCartMovement == FORWARD) {
 	
-		if (totalDistanceMoved - prevDriftCheckDistance > 50) {
+		if (partialMoveDistance - prevDriftCheckDistance > 50) {
 			// check for full circle crossing
 			int offsetImu = 0;
 			int offsetStart = 0;
@@ -876,11 +843,11 @@ void handleDrift() {
 				driftCompensationRight = 0.95;
 			}
 
-			prevDriftCheckDistance = totalDistanceMoved;
+			prevDriftCheckDistance = partialMoveDistance;
 
 			if (verbose) {
 				Serial.print(F("cart position update, distance: "));
-				Serial.print(totalDistanceMoved);
+				Serial.print(partialMoveDistance);
 				Serial.print(F(", startYaw: "));
 				Serial.print(imuYawStart);
 				Serial.print(F(", imuYaw: "));
@@ -899,10 +866,10 @@ void handleDrift() {
 // proceed in driving in one of the directions
 void handleMove(bool newSensorValuesAvailable) {
 
-	updateDistanceMoved();
+	//updateDistanceAngleMillisMoved();
 
 	// check for total distance done
-	if (abs(totalDistanceMoved - requestedDistance) < 5) {
+	if (abs(requestedDistance - sumDonePartialDistances - partialMoveDistance) < 5) {
 		stopCart(true, "requested distance moved");
 
 		Serial.print(F("stop move, imuYawStart: "));
@@ -910,7 +877,7 @@ void handleMove(bool newSensorValuesAvailable) {
 		Serial.print(F(", requested distance: "));
 		Serial.print(requestedDistance);
 		Serial.print(F(", distance moved: "));
-		Serial.print(totalDistanceMoved);
+		Serial.print(sumDonePartialDistances + partialMoveDistance);
 		Serial.print(F(", imuYawEnd: "));
 		Serial.print(platformImu.getYaw());
 		Serial.println();
@@ -919,7 +886,7 @@ void handleMove(bool newSensorValuesAvailable) {
 	}
 
 	// check for sensor test, do not move in sensor test mode
-	if (sensorInTest > -1) return;
+	if (moveType == SENSORTEST) return;
 
 	// with new sensor values available check for free move
 	if (newSensorValuesAvailable) {
@@ -936,84 +903,70 @@ void handleMove(bool newSensorValuesAvailable) {
 		// check for cart currently stopped
 		if (cartSpeed == 0) {
 
+			// reset the encoder counter to measure distance travelled
+			noInterrupts();
+			wheelPulseCounter = 0;
+			interrupts();
+
 			// start with minimal speed and speedPhase ACCELERATE
-			int newSpeed = MINIMAL_CART_SPEED;
 			speedPhase = ACCELERATE;
-			trackMoveTime(cartSpeed, newSpeed);
-			cartSpeed = newSpeed;
-			if (verbose) Serial.println(F("speedPhase ACCELERATE set"));
+			cartSpeed = MINIMAL_CART_SPEED;
+			if (verbose) prtl("speedPhase ACCELERATE set");
 		}
 
 		activeCartMovement = plannedCartMovement;
 
-		remainingDistance = requestedDistance - totalDistanceMoved;
-		remainingMillis = maxMoveMillis - totalPartialMoveMillis - (millis() - partialMoveStartMillis);
-
 		// check for speed phase accelerate in move
 		if (speedPhase == ACCELERATE) {
 
-			// increase speed
-			if (cartSpeed < requestedMaxSpeed) {
-				int newSpeed = cartSpeed + MAX_SPEED_INCREASE;
-				trackMoveTime(cartSpeed, newSpeed);
-				cartSpeed = newSpeed;
+			// keep track of acceleration distance and time to be used in deceleration
+			accelerationDistance = partialMoveDistance;
+			accelerationMillis = millis() - partialMoveStartMillis;
 
-				// keep track of acceleration distance and time to be used in deceleration
-				accelerationDistance = totalDistanceMoved - distanceDoneWhenBlocked;
-				accelerationTime = millis() - partialMoveStartMillis;
-
-				// check for end of acceleration phase
-				// this is either reaching the max speed or when the remaining distance to drive
-				// is less than 60 mm
-				if (cartSpeed >= requestedMaxSpeed || remainingDistance < 60) {
-					speedPhase = CRUISE;
-					if (verbose) Serial.println(F("speedPhase CRUISE set"));
-
-					if (verbose) {
-						Serial.print(F("acceleration done, cartSpeed: "));
-						Serial.print(cartSpeed);
-						Serial.print(F(", acceleration distance: "));
-						Serial.print(accelerationDistance);
-						Serial.print(F(", acceleration time: "));
-						Serial.print(accelerationTime);
-						Serial.println();
-					}
-				}
+			// increase speed if we have remaining distance and remaining time
+			if ((cartSpeed < requestedMaxSpeed) &&
+				(remainingMoveDistance > 60) &&
+				(remainingMoveMillis > 500)) {
+				cartSpeed += MAX_SPEED_INCREASE;
+			}
+			else {
+				speedPhase = CRUISE;
+				if (verbose) prtl("speedPhase CRUISE set");
 			}
 		}
 
-		Serial.print(F("handleMove, dist requested: ")); Serial.print(requestedDistance);
-		Serial.print(F(", moved: ")); Serial.print(totalDistanceMoved);
-		Serial.print(F(", remaining: ")); Serial.print(remainingDistance);
-		Serial.print(F(", accelerate: ")); Serial.print(accelerationDistance);
-		Serial.println();
-
-		// slow cart down conditions:
-		if ((remainingDistance < accelerationDistance) 
-			|| (remainingMillis < maxMoveMillis - 500)) {
+		if (verbose) {
+			prt("handleMove, dist requested: "); pr(requestedDistance);
+			prt(", moved: "); pr(sumDonePartialDistances);
+			prt(", remaining: "); pr(remainingMoveDistance);
+			prt(", accelerate: "); pr(accelerationDistance);
+			prl();
+		}
+		// cart decelerate conditions in move:
+		if ((remainingMoveDistance < accelerationDistance) 
+			|| (remainingMoveMillis < maxMoveMillis - 500)) {
 			if (speedPhase != DECELERATE) {
 				speedPhase = DECELERATE;
 				if (verbose) {
-					Serial.print(F("speedPhase DECELERATE set, dist remaining:")); Serial.print(remainingDistance);
+					Serial.print(F("speedPhase DECELERATE set, dist remaining:")); Serial.print(remainingMoveDistance);
 					Serial.print(F(", accel: ")); Serial.print(accelerationDistance);
 					Serial.print(F(", cartSpeed: ")); Serial.print(cartSpeed);
-					Serial.print(F(", rem.Millis: ")); Serial.print(remainingMillis);
+					Serial.print(F(", rem.Millis: ")); Serial.print(remainingMoveMillis);
 					Serial.println();
 				}
 			}
 		}
 
 		if (speedPhase == DECELERATE) {
-			int newSpeed = cartSpeed - MAX_SPEED_DECREASE;
-			trackMoveTime(cartSpeed, newSpeed);
-			cartSpeed = newSpeed;
+			//trackMoveTime(cartSpeed, newSpeed);
+			cartSpeed -= MAX_SPEED_DECREASE;
 
 			if (cartSpeed < MINIMAL_CART_SPEED) {
 				cartSpeed = MINIMAL_CART_SPEED;
 			}
 			if (verbose) {
 				Serial.print(F("decelerate remaining distance: "));
-				Serial.print(remainingDistance);
+				Serial.print(remainingMoveDistance);
 				Serial.print(F(", cartSpeed: "));
 				Serial.print(cartSpeed);
 				Serial.println();
@@ -1036,24 +989,31 @@ void handleCartMovement() {
 
 	if (plannedCartMovement != STOP) {
 
-		//Serial.println("handleCartMovement");
+		if (activeCartMovement != STOP) {
 
-		// check total move time
-		int currentTotalMoveMillis = totalPartialMoveMillis + partialMoveMillis;
-		if (currentTotalMoveMillis > maxMoveMillis) {
+			updateDistanceAngleMillisMoved();
 
-			stopCart(true, "max move duration reached");
+			// check total move time
+			if ((sumDonePartialMoveMillis + partialMoveMillis) > maxMoveMillis) {
 
-			Serial.print(millis() - moveRequestReceivedMillis); Serial.print(F("ms, "));
-			Serial.print(F("maxMoveDuration reached, stopping cart after: ")); Serial.print(currentTotalMoveMillis); 			
-			Serial.print(F(" ms, totalPartialMoveMillis: ")); Serial.print(totalPartialMoveMillis);
-			Serial.print(F(" ms, partialMoveMillis: ")); Serial.print(millis() - partialMoveStartMillis);
-			Serial.print(F(" ms, maxMoveMillis: ")); Serial.print(maxMoveMillis);
-			Serial.print(F(" ms, distance: ")); Serial.print(totalDistanceMoved);
-			Serial.print(F(", imuYaw: ")); Serial.print(platformImu.getYaw());
-			Serial.println();
-			return;
-		}
+				stopCart(true, "max move duration reached");
+
+				pr(millis() - moveRequestReceivedMillis); pr("ms, ");
+				prt("maxMoveDuration reached, stopping cart after: "); pr(sumDonePartialMoveMillis + partialMoveMillis);
+				prt(" ms, maxMoveMillis: "); pr(maxMoveMillis);
+				prt(" ms, distance: "); pr(sumDonePartialDistances);
+				prt(", imuYaw: "); pr(platformImu.getYaw());
+				prl();
+				return;
+			}
+
+			// check for encoder signals
+			if ((millis() - partialMoveStartMillis > 500) && (partialMoveDistance == 0)) {
+				stopCart(false, "missing wheel encoder signals");
+				return;
+			}
+		}			
+
 
 		// check continuation time after obstacle or abyss detection
 		if (cartSpeed == 0) {
@@ -1065,30 +1025,13 @@ void handleCartMovement() {
 
 				stopCart(true, "timeout in start or continuation of move");
 
-				Serial.print(F("max wait after blocking reached, distance: "));
-				Serial.print(totalDistanceMoved);
-				Serial.print(F(", imuYaw: "));
-				Serial.println(platformImu.getYaw());
+				prt("max wait after blocking reached, distance: "); pr(sumDonePartialDistances);
+				prt(", imuYaw: "); pr(platformImu.getYaw());
+				prl();
 				return;
 			}
 		}
 
-		// keep track of total move time
-		if (activeCartMovement != STOP) {
-			if (cartSpeed > 0) {
-				currentTotalMoveMillis = totalPartialMoveMillis + ((millis() - partialMoveStartMillis));
-				if (verbose) {
-					Serial.print(millis() - moveRequestReceivedMillis); Serial.print(", ");
-					Serial.print(F("currentMoveMillis: ")); Serial.print(currentTotalMoveMillis);
-					Serial.print(F(", maxMoveDuration: ")); Serial.println(maxMoveMillis);
-				}
-				// verify we get wheel encoder signals
-				if ((sensorInTest > -1) && (millis() - partialMoveStartMillis > 500) && (wheelPulseCounter == 0)) {
-					stopCart(false, "missing wheel encoder signals");
-					return;
-				}
-			}
-		}
 	
 		// for a protected move check the swiping servos state
 		if (moveProtected) {
@@ -1141,7 +1084,7 @@ void handleCartMovement() {
 			Serial.println();		// make sure it's a new line
 			Serial.print("!P1,");
 			Serial.print(int(platformImu.getYaw()));
-			Serial.print(",");	Serial.print(totalDistanceMoved);
+			Serial.print(",");	Serial.print(sumDonePartialDistances);
 			Serial.print(",");	Serial.print(activeCartMovement);
 		
 			Serial.println();

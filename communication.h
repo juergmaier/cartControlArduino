@@ -13,9 +13,9 @@
 #define PIN_KINECT_POWER  32
 
 extern bool cartControlActive;
-extern bool newData;
-extern char receivedChars[64];
-extern int numChars;
+//extern bool newData;
+//extern char receivedChars[64];
+//extern int numChars;
 extern unsigned long lastMsg;
 extern bool configurationComplete;
 
@@ -29,12 +29,6 @@ extern float speedFactor;
 extern float speedOffset;
 extern float speedFactorSideway;
 extern float speedFactorDiagonal;
-
-extern int _prevImuYaw;
-extern unsigned long lastOrientationChange;
-extern int targetYaw;
-extern int startingYaw;
-extern int currentYaw;
 
 extern int _requestedTableHeight;
 

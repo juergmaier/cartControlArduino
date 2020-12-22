@@ -61,26 +61,17 @@ byte headBnoAddress = 0x29;
 cImu headImu;
 cImu platformImu;
 
-int targetYaw;
-int startingYaw = 0;
-int currentYaw = 0;
-
 int cartCamPosition = 0;		// pointing down
 int cartCamServoPin = 13;
 
 // serial commands
 boolean cartControlActive = false;
-char receivedChars[64]; // an array to store the received data
-int numChars = 0;
-bool newData = false;
 bool configurationComplete = false;
 
-//int lastCurrent = 0;
 int testDirection;
 
 // last check on 12V supply
-unsigned long _last12VCheckMillis;
-int _mVolts;
+unsigned long last12VCheckMillis;
 
 // docking state
 boolean isDocked = false;
@@ -90,11 +81,6 @@ volatile unsigned long wheelPulseCounter = 0;
 
 int _speedUnifyer[MOTORS_COUNT]{ 104,100,96,82 };
 
-int sensorInTest = -1;
-
-int remainingDistance;
-int remainingMillis;
-int remainingYaw;
 int movementDuration;
 int maxDuration;
 int delayMillis;
@@ -102,6 +88,7 @@ boolean dockingSwitchState;
 float distance;
 unsigned long counts;
 
+int sensorInTest;
 
 // use only 1 interrupt and count the flanks as we know the current direction
 void wheelChange() {
@@ -234,7 +221,7 @@ void setup()
 	digitalWrite(CHARGE_12V_BATTERY_PIN, HIGH);
 
 	// make shure to show voltage with first movement after restart
-	_last12VCheckMillis = 0;
+	last12VCheckMillis = 0;
 
 	// set wheel encoder pins and interrupt routines
 	pinMode(WHEEL_ENCODER_PIN_A, INPUT_PULLUP);

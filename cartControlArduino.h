@@ -8,6 +8,7 @@
 
 // print macros using F() PROGMEM for text strings
 #define prt(x) Serial.print(F(x))
+#define prtl(x) Serial.println(F(x))
 #define pr(x) Serial.print(x)
 #define prl(x) Serial.println(x)
 
@@ -84,9 +85,6 @@ extern bool verbose;
 extern cImu platformImu;
 extern cImu headImu;
 
-extern int remainingDistance;
-extern int remainingMillis;
-extern int remainingYaw;
 extern int movementDuration;
 extern int maxDuration;
 extern int delayMillis;
@@ -95,6 +93,8 @@ extern float distance;
 extern unsigned long counts;
 
 extern void loadFloorReferenceDistances();		//distance.cpp
+extern volatile unsigned long wheelPulseCounter;
 
 #endif
+
 

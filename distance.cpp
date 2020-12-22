@@ -472,7 +472,7 @@ void processNewRawValues(int swipeStep) {
 		irSensorStepData[sensorId][swipeStep].abyssDepth = abyssDepth;
 
 		// in sensor test and verbose mode print the summary
-		if (sensorInTest > -1 && verbose) {		// in sensor test and verbose mode 
+		if (moveType == SENSORTEST && verbose) {		// in sensor test and verbose mode 
 			pr(getIrSensorName(sensorId));
 			prt(", swipeStep: "); pr(swipeStep);
 			prt(", distance: "); pr(distMm);
@@ -505,7 +505,7 @@ void processNewRawValues(int swipeStep) {
 				if (millis() - moveRequestReceivedMillis > 500) {
 
 					// in case of a sensor test log the measured distances too
-					if (sensorId == sensorInTest) {
+					if (moveType == SENSORTEST && sensorId == sensorInTest) {
 						logIrDistanceValues(sensorId);
 					}
 

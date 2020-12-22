@@ -13,6 +13,11 @@
 // heartbeat
 unsigned long lastMsg;
 
+char msgCopyForParsing[64];	// once a new message is received, parse it from a copy of the receiver buffer
+char receivedChars[64]; // an array to store the received data
+int numChars = 0;
+bool newData = false;
+
 // fill buffer with message
 // set newData flag to true, processing in motorizedBase.cpp
 
@@ -36,11 +41,11 @@ void recvWithEndMarker() {
 
 		if (rc != endMarker) {
 			receivedChars[ndx] = rc;
-			numChars = ndx;
 			ndx++;
 			if (ndx >= 60) {
 				ndx = 60 - 1;
 			}
+			numChars = ndx;
 		}
 		else {
 			receivedChars[ndx] = '\0'; // terminate the string
@@ -65,14 +70,14 @@ void checkCommand() {
 	int servoId;
 	int sensorId;
 	int testDirection;
-	char msgCopyForParsing[64];
+	//char msgCopyForParsing[64];
 	char * strtokIndx; // this is used by strtok() as an index
 
 	int thisDir;
 	int thisRequestedDistance;
 	int thisRequestedMaxSpeed;
 	int thisMaxMoveDuration;
-	int thisRequestedAngle;
+	int thisRequestedRelAngle;
 	int thisFlagProtected;
 	bool thisMoveProtected;
 
@@ -123,6 +128,8 @@ void checkCommand() {
 
 			strtokIndx = strtok(NULL, ","); // flagProtected
 			thisMoveProtected = atoi(strtokIndx) == 1;
+
+			moveType = STRAIGHT;
 			//Serial.print(F("move command, thisDir: ")); Serial.println(thisDir);
 			setPlannedCartMove(thisDir, thisRequestedMaxSpeed, thisRequestedDistance, thisMaxMoveDuration, thisMoveProtected);
 
@@ -133,7 +140,7 @@ void checkCommand() {
 			strtokIndx = strtok(msgCopyForParsing, ","); // msgId, "2"
 
 			strtokIndx = strtok(NULL, ","); // angle
-			thisRequestedAngle = atoi(strtokIndx);
+			thisRequestedRelAngle = atoi(strtokIndx);
 
 			strtokIndx = strtok(NULL, ","); // speed
 			thisRequestedMaxSpeed = atoi(strtokIndx);
@@ -141,7 +148,8 @@ void checkCommand() {
 			strtokIndx = strtok(NULL, ","); // duration
 			thisMaxMoveDuration = atoi(strtokIndx);
 
-			setPlannedCartRotation(ROTATE_COUNTERCLOCK, thisRequestedMaxSpeed, thisRequestedAngle, thisMaxMoveDuration);
+			moveType = ROTATE;
+			setPlannedCartRotation(ROTATE_COUNTERCLOCK, thisRequestedMaxSpeed, thisRequestedRelAngle, thisMaxMoveDuration);
 
 			break;
 
@@ -151,7 +159,7 @@ void checkCommand() {
 			strtokIndx = strtok(msgCopyForParsing, ","); // msgId, "3"
 
 			strtokIndx = strtok(NULL, ","); // angle
-			thisRequestedAngle = atoi(strtokIndx);
+			thisRequestedRelAngle = atoi(strtokIndx);
 
 			strtokIndx = strtok(NULL, ","); // speed
 			thisRequestedMaxSpeed = atoi(strtokIndx);
@@ -159,7 +167,8 @@ void checkCommand() {
 			strtokIndx = strtok(NULL, ","); // duration
 			thisMaxMoveDuration = atoi(strtokIndx);
 
-			setPlannedCartRotation(ROTATE_CLOCKWISE, thisRequestedMaxSpeed, thisRequestedAngle, thisMaxMoveDuration);
+			moveType = ROTATE;
+			setPlannedCartRotation(ROTATE_CLOCKWISE, thisRequestedMaxSpeed, thisRequestedRelAngle, thisMaxMoveDuration);
 
 			break;
 
@@ -181,7 +190,7 @@ void checkCommand() {
 
 		case '6':  // set new speed
 
-			strtokIndx = strtok(msgCopyForParsing, ","); // msgId, "7"
+			strtokIndx = strtok(msgCopyForParsing, ","); // msgId, "6"
 
 			strtokIndx = strtok(NULL, ","); // sensorId
 			newSpeed = atoi(strtokIndx);
@@ -193,39 +202,24 @@ void checkCommand() {
 
 		case '7':  // test IR sensor
 
-			sensorInTest = 0;
 			strtokIndx = strtok(msgCopyForParsing, ","); // msgId, "7"
 
 			strtokIndx = strtok(NULL, ","); // sensorId
 			sensorInTest = atoi(strtokIndx); 
 
 			prt("sensorInTest, Id: "); pr(sensorInTest);
-			if (sensorInTest <= 9) prt(", sensorName: "); pr(irSensorDefinitions[sensorInTest].sensorName);
-			prl();
-
-			// set a move direction that includes the sensor to test
-			if (sensorInTest >= 0 && sensorInTest < 3) {
-				cartDirection = FORWARD;
-				testDuration = 5000;
-			}
-			if (sensorInTest >= 3 && sensorInTest < 6) {
-				cartDirection = BACKWARD;
-				testDuration = 5000;
-			}
-			if (sensorInTest == 6 || sensorInTest == 7) {
-				cartDirection = LEFT;
-				testDuration = 500;
-			}
-			if (sensorInTest == 8 || sensorInTest == 9) {
-				cartDirection = RIGHT;
-				testDuration = 500;
-			}
-			if (sensorInTest > 9) {
-				prt("sensor test for invalid ir sensor: "); pr(sensorInTest); prl();
-				sensorInTest = 0;
+			if (sensorInTest < 0 || sensorInTest > 9) {
+				prtl(", invalid sensor Id, only 0..9 allowed");
 				break;
 			}
-			//setPlannedCartMove(MOVEMENT cartAction, int maxSpeed, int dDistance, int duration, bool moveProtected) {
+			prt(", sensorName: "); prl(irSensorDefinitions[sensorInTest].sensorName);
+
+			// set move direction and duration based on sensor to test
+			int moveDirectionForSensorTest[] = {FORWARD,FORWARD,FORWARD,BACKWARD,BACKWARD,BACKWARD,LEFT,LEFT,RIGHT,RIGHT};
+			cartDirection = moveDirectionForSensorTest[sensorInTest];
+			testDuration = irSensorDefinitions[sensorInTest].swipe ? 5000 : 500;
+
+			moveType = SENSORTEST;
 			setPlannedCartMove(cartDirection, 0, 2000, testDuration, true);
 
 			break;
