@@ -29,10 +29,10 @@ typedef struct ir_sensor {
 
 // do not change the order or make sure to adjust code with all occurrences
 typedef enum FLOOR_DISTANCE_SENSORS {
-	FRONT_LEFT, FRONT_CENTER, FRONT_RIGHT,
-	BACK_LEFT, BACK_CENTER, BACK_RIGHT,
-	LEFT_SIDE_FRONT, LEFT_SIDE_BACK, 
-	RIGHT_SIDE_FRONT, RIGHT_SIDE_BACK,
+	SWIPE_FRONT_LEFT, SWIPE_FRONT_CENTER, SWIPE_FRONT_RIGHT,
+	SWIPE_BACK_LEFT, SWIPE_BACK_CENTER, SWIPE_BACK_RIGHT,
+	STATIC_FRONT_LEFT, STATIC_BACK_LEFT, 
+	STATIC_FRONT_RIGHT, STATIC_BACK_RIGHT,
 	IR_SENSORS_COUNT
 } FLOOR_DISTANCE_SENSOR;
 
@@ -75,9 +75,9 @@ typedef struct irSensorDefinition {
 //} irSensorSwipeStepDataType;
 
 typedef struct irSensorStepValuesType {
-	byte distMm;
-	byte obstacleHeight;
-	byte abyssDepth;
+	int distMm;
+	int obstacleHeight;
+	int abyssDepth;
 	unsigned long lastMeasureMillis;
 } irSensorStepValuesType;
 
@@ -100,10 +100,10 @@ typedef enum {
 
 
 // DECLARATION of global variables of distance.cpp
-extern byte irSensorObstacleMaxValue;
-extern byte irSensorObstacleMaxSensor;
-extern byte irSensorAbyssMaxValue;
-extern byte irSensorAbyssMaxSensor;
+extern int irSensorObstacleMaxValue;
+extern int irSensorObstacleMaxSensor;
+extern int irSensorAbyssMaxValue;
+extern int irSensorAbyssMaxSensor;
 
 // variables for max distances
 extern int maxDistanceSensorId;
@@ -122,7 +122,7 @@ extern int IR_MIN_WAIT_SWIPE_SERVO;		// minimal wait time after swipe servo move
 extern int loopCount;
 
 extern irSensorDefinition irSensorDefinitions[];
-extern byte irSensorReferenceDistances[IR_SENSORS_COUNT][NUM_MEASURE_STEPS];
+extern int irSensorReferenceDistances[IR_SENSORS_COUNT][NUM_MEASURE_STEPS];
 
 extern int irSensorStepRaw[IR_SENSORS_COUNT][NUM_REPETITIONS_IR_MEASURE];
 extern irSensorStepValuesType irSensorStepData[IR_SENSORS_COUNT][NUM_MEASURE_STEPS];
@@ -140,7 +140,7 @@ extern void setupSwipeServos(int);
 extern void readIrSensorValues(int swipeStep);
 extern void processNewRawValues(int swipeStep);
 extern void logMeasureStepResults();
-extern void setIrSensorsMaxValues();
+extern void evalIrSensorsMaxValues();
 extern bool isIrSensorDataCurrent();
 
 extern int maxRangeIrSensorRawValues(MOVEMENT activeCartMovement);

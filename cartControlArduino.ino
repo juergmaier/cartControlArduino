@@ -58,8 +58,8 @@ float speedFactorDiagonal = 0.7;
 byte platformBnoAddress = 0x28;
 byte headBnoAddress = 0x29;
 
-cImu headImu;
-cImu platformImu;
+Imu headImu;
+Imu platformImu;
 
 int cartCamPosition = 0;		// pointing down
 int cartCamServoPin = 13;

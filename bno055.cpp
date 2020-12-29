@@ -3,7 +3,7 @@
 
 extern bool verbose;
 
-bool cImu::setAddressAndName(byte thisAddress, String thisName, String thisId) {
+bool Imu::setAddressAndName(byte thisAddress, String thisName, String thisId) {
 
 	address = thisAddress;
 	name = thisName;
@@ -35,16 +35,20 @@ bool cImu::setAddressAndName(byte thisAddress, String thisName, String thisId) {
 	return true;
 }
 
-float cImu::getYaw() { return yaw;  }
-float cImu::getRoll() { return roll; }
-float cImu::getPitch() { return pitch; }
-String cImu::getId() { return id; }
-String cImu::getName() { return name; }
-unsigned long cImu::getMillisLastPublished() { return millisLastPublished; }
-void cImu::setMillisLastPublished() { millisLastPublished = millis(); }
+float Imu::getYaw() { return yaw;  }
+float Imu::getRoll() { return roll; }
+float Imu::getPitch() { return pitch; }
+String Imu::getId() { return id; }
+String Imu::getName() { return name; }
+unsigned long Imu::getMillisLastPublished() { return millisLastPublished; }
+void Imu::setMillisLastPublished() { millisLastPublished = millis(); }
 
+int Imu::absAngleDiff(int a, int b) {
+	int diff = (a % 360) - (b % 360) + 360;		// arduino can not modulo with neg numbers
+	return abs((diff + 180) % 360 - 180) % 360;	
+}
 
-bool cImu::changedBnoSensorData() {
+bool Imu::changedBnoSensorData() {
 
 	sensors_event_t bnoData;
 	bool dataChanged = false;
@@ -56,7 +60,8 @@ bool cImu::changedBnoSensorData() {
 	pitch = bnoData.orientation.y;
 	roll = bnoData.orientation.z;	// Correction?
 
-	if (abs(prevYaw - yaw) > 0.5 && abs(prevYaw - yaw) < 359.5) {
+	int yawDiff = absAngleDiff(int(yaw), int(prevYaw));
+	if (yawDiff > 1) {
 		dataChanged = true;
 		prevYaw = yaw;
 	}
@@ -66,7 +71,7 @@ bool cImu::changedBnoSensorData() {
 		prevRoll = roll;
 	}
 
-	if (abs(prevPitch - pitch) > 0.5) {
+	if (abs(prevPitch - pitch) > 1) {
 		dataChanged = true;
 		prevPitch = pitch;
 	}

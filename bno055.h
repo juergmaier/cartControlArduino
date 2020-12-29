@@ -6,7 +6,7 @@
 #include "arduino.h"
 #include <Adafruit_BNO055.h>
 
-class cImu {
+class Imu {
 
 public:
 	bool setAddressAndName(byte thisAddress, String thisName, String thisId);
@@ -18,7 +18,8 @@ public:
 	String getName();
 	unsigned long getMillisLastPublished();
 	void setMillisLastPublished();
-
+	int absAngleDiff(int a, int b);
+	
 private:
 	byte address;
 	String name;

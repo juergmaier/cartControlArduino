@@ -82,8 +82,8 @@ extern bool analogMeasureCycle;
 
 extern bool verbose;
 
-extern cImu platformImu;
-extern cImu headImu;
+extern Imu platformImu;
+extern Imu headImu;
 
 extern int movementDuration;
 extern int maxDuration;

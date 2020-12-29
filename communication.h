@@ -36,6 +36,6 @@ void recvWithEndMarker();
 
 void checkCommand();
 
-void sendImuValues(cImu imu);
+void sendImuValues(Imu imu);
 
 #endif

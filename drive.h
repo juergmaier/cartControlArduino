@@ -30,18 +30,15 @@ extern MOVE_TYPE moveType;
 extern void setupFahren();
 
 // driving direction
-extern void setPlannedCartMove(MOVEMENT, int, int, int, bool);
-extern void setPlannedCartRotation(MOVEMENT, int, int, int);
+extern void setPlannedCartMove(MOVEMENT, int, int, int, int, bool);
 extern MOVEMENT plannedCartMovement;
 extern MOVEMENT activeCartMovement;
 
-// stop base
+// stop cart
 extern void stopCart(bool, String);
 
 // drive
 extern void handleCartMovement();
-//extern void setInvolvedIrSensors(MOVEMENT plannedCartDirection, bool moveProtected);
-
 extern int checkUltrasonicDistances();
 
 #endif

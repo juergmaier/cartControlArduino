@@ -21,7 +21,7 @@ bool newData = false;
 // fill buffer with message
 // set newData flag to true, processing in motorizedBase.cpp
 
-void sendImuValues(cImu imu) {
+void sendImuValues(Imu imu) {
 
 	long milliYaw = imu.getYaw() * 1000;
 	long milliRoll = imu.getRoll() * 1000;
@@ -108,6 +108,20 @@ void checkCommand() {
 		// if switch is not working check for new variable assignments within switch section and remove them
 		///////////////////////////////////////////////
 		///////////////////////////////////////////////
+		//DECLARE ALL NEW VARIABLES USED IN SWITCH HERE OR USE {} for the switch block
+		// switch (x) {
+		//	case 1: {
+		//		int y = 5;
+		//		break;
+		//	}
+		//}
+		int speedPercentage;
+		int moveDirectionForSensorTest[] = {FORWARD,FORWARD,FORWARD,BACKWARD,BACKWARD,BACKWARD,LEFT,LEFT,RIGHT,RIGHT};
+		int swipeStep;
+		int byteValue;
+
+		//DECLARE ALL NEW VARIABLES USED IN SWITCH BEFORE THE SWITCH
+
 		switch (mode) {		
 			
 		case '1':  // move dir 1=forward .. 6=backward, e.g. 1,<dir d1>,<speed d3>,<distance d4>,<max duration d4>
@@ -131,12 +145,12 @@ void checkCommand() {
 
 			moveType = STRAIGHT;
 			//Serial.print(F("move command, thisDir: ")); Serial.println(thisDir);
-			setPlannedCartMove(thisDir, thisRequestedMaxSpeed, thisRequestedDistance, thisMaxMoveDuration, thisMoveProtected);
+			setPlannedCartMove(thisDir, thisRequestedMaxSpeed, thisRequestedDistance, 0, thisMaxMoveDuration, thisMoveProtected);
 
 			break;
 
-		case '2':  // rotate counterclockwise or left: 2,<angle>,<speed>,<maxDuration>
-
+		case '2':   // rotate counterclockwise or left: 3 digits for relative angle, angle given in positive degrees
+					// 2,<angle>,<speed>,<maxDuration>
 			strtokIndx = strtok(msgCopyForParsing, ","); // msgId, "2"
 
 			strtokIndx = strtok(NULL, ","); // angle
@@ -149,13 +163,13 @@ void checkCommand() {
 			thisMaxMoveDuration = atoi(strtokIndx);
 
 			moveType = ROTATE;
-			setPlannedCartRotation(ROTATE_COUNTERCLOCK, thisRequestedMaxSpeed, thisRequestedRelAngle, thisMaxMoveDuration);
+			setPlannedCartMove(ROTATE_COUNTERCLOCK, thisRequestedMaxSpeed, 0, thisRequestedRelAngle, thisMaxMoveDuration, true);
 
 			break;
 
 
-		case '3':  // rotate clockwise or right, 3 digits for angle, angle positive
-
+		case '3':   // rotate clockwise or right, 3 digits for relative angle, angle given in positive degrees
+					// 3,<angle>,<speed>,<maxDuration>
 			strtokIndx = strtok(msgCopyForParsing, ","); // msgId, "3"
 
 			strtokIndx = strtok(NULL, ","); // angle
@@ -168,7 +182,7 @@ void checkCommand() {
 			thisMaxMoveDuration = atoi(strtokIndx);
 
 			moveType = ROTATE;
-			setPlannedCartRotation(ROTATE_CLOCKWISE, thisRequestedMaxSpeed, thisRequestedRelAngle, thisMaxMoveDuration);
+			setPlannedCartMove(ROTATE_CLOCKWISE, thisRequestedMaxSpeed, 0, thisRequestedRelAngle, thisMaxMoveDuration, true);
 
 			break;
 
@@ -215,12 +229,11 @@ void checkCommand() {
 			prt(", sensorName: "); prl(irSensorDefinitions[sensorInTest].sensorName);
 
 			// set move direction and duration based on sensor to test
-			int moveDirectionForSensorTest[] = {FORWARD,FORWARD,FORWARD,BACKWARD,BACKWARD,BACKWARD,LEFT,LEFT,RIGHT,RIGHT};
 			cartDirection = moveDirectionForSensorTest[sensorInTest];
 			testDuration = irSensorDefinitions[sensorInTest].swipe ? 5000 : 500;
 
 			moveType = SENSORTEST;
-			setPlannedCartMove(cartDirection, 0, 2000, testDuration, true);
+			setPlannedCartMove(cartDirection, 0, 0, 2000, testDuration, true);
 
 			break;
 
@@ -308,8 +321,7 @@ void checkCommand() {
 		case 'd':	// speed adjustments for all motors in percent in order fr,fl,br,bl
 			
 			strtokIndx = strtok(msgCopyForParsing, ","); // msgId, "d"
-			int speedPercentage;
-
+			
 			for (int i = 0; i < MOTORS_COUNT; i++) {
 				strtokIndx = strtok(NULL, ","); // next item
 				speedPercentage = atoi(strtokIndx);    // convert this part to an integer
@@ -336,22 +348,24 @@ void checkCommand() {
 
 		case 'f':	// for given sensor set measured distances as floor distances
 
+			prt("set floor reference distances");
 			strtokIndx = strtok(msgCopyForParsing, ","); // msgId, "f"
 
 			strtokIndx = strtok(NULL, ","); // next item
 			sensorId = atoi(strtokIndx);    // sensorId
-
-			Serial.println(F("set floor reference distances"));
+			prl(sensorId);
+			
 			eepromStartAddr = sensorId * NUM_MEASURE_STEPS;
 
-			for (int swipeStep = 0; swipeStep < NUM_MEASURE_STEPS; swipeStep++) {
+			for (swipeStep = 0; swipeStep < NUM_MEASURE_STEPS; swipeStep++) {
 				strtokIndx = strtok(NULL, ","); // next item
-				distance = atoi(strtokIndx);    // sensorId
+				distance = atoi(strtokIndx);    // value
 
 				EEPROM.write(eepromStartAddr + swipeStep, distance);
 				irSensorReferenceDistances[sensorId][swipeStep] = distance;
 				
 			}
+
 			break;
 
 
