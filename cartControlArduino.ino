@@ -16,7 +16,7 @@
 #include "communication.h"
 
 
-bool verbose = true;
+bool verbose = false;
 
 ///////////////////////////////////////////////////////////////////////////////
 // these values may get overwritten by cartControl with message 'a'
@@ -248,16 +248,10 @@ void loop()
 	// check for changed imu values
 	// limit updates to 10 per second
 	if (headImu.changedBnoSensorData()) {
-		if (millis() - headImu.getMillisLastPublished() > 100) {
-			sendImuValues(headImu);
-			headImu.setMillisLastPublished();
-		}
+		sendImuValues(headImu);
 	}
 	if (platformImu.changedBnoSensorData()) {
-		if (millis() - platformImu.getMillisLastPublished() > 100) {
-			sendImuValues(platformImu);
-			platformImu.setMillisLastPublished();
-		}
+		sendImuValues(platformImu);
 	}
 
 	// check for heartbeat from controlling computer

@@ -60,6 +60,10 @@ bool Imu::changedBnoSensorData() {
 	pitch = bnoData.orientation.y;
 	roll = bnoData.orientation.z;	// Correction?
 
+	// avoid high number of updates when part in move
+	if (millis() - getMillisLastPublished() < 100) return false;
+
+	// check for changed values
 	int yawDiff = absAngleDiff(int(yaw), int(prevYaw));
 	if (yawDiff > 1) {
 		dataChanged = true;

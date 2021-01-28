@@ -28,6 +28,8 @@ void sendImuValues(Imu imu) {
 	long milliPitch = imu.getPitch() * 1000;
 
 	pr(imu.getId()); pr(","); pr(milliYaw); pr(","); pr(milliRoll); pr(","); pr(milliPitch); prl();
+
+	imu.setMillisLastPublished();
 }
 
 
@@ -121,11 +123,17 @@ void checkCommand() {
 		int byteValue;
 
 		//DECLARE ALL NEW VARIABLES USED IN SWITCH BEFORE THE SWITCH
+		// or use brackets in case section
 
 		switch (mode) {		
 			
 		case '1':  // move dir 1=forward .. 6=backward, e.g. 1,<dir d1>,<speed d3>,<distance d4>,<max duration d4>
-
+			{
+			// new move commands are only accepted when not in current move
+			if (plannedCartMovement != STOP) {
+				prtl("ignoring new move command while in move");
+				return;
+			}
 			strtokIndx = strtok(msgCopyForParsing, ","); // msgId, "1"
 
 			strtokIndx = strtok(NULL, ","); // direction
@@ -148,9 +156,15 @@ void checkCommand() {
 			setPlannedCartMove(thisDir, thisRequestedMaxSpeed, thisRequestedDistance, 0, thisMaxMoveDuration, thisMoveProtected);
 
 			break;
+			}
 
-		case '2':   // rotate counterclockwise or left: 3 digits for relative angle, angle given in positive degrees
+		case '2': { // rotate counterclockwise or left: 3 digits for relative angle, angle given in positive degrees
 					// 2,<angle>,<speed>,<maxDuration>
+			if (plannedCartMovement != STOP) {
+				prtl("ignoring new rotate command while in move");
+				return;
+			}
+
 			strtokIndx = strtok(msgCopyForParsing, ","); // msgId, "2"
 
 			strtokIndx = strtok(NULL, ","); // angle
@@ -166,10 +180,16 @@ void checkCommand() {
 			setPlannedCartMove(ROTATE_COUNTERCLOCK, thisRequestedMaxSpeed, 0, thisRequestedRelAngle, thisMaxMoveDuration, true);
 
 			break;
+		}
 
-
-		case '3':   // rotate clockwise or right, 3 digits for relative angle, angle given in positive degrees
+		case '3': { // rotate clockwise or right, 3 digits for relative angle, angle given in positive degrees
 					// 3,<angle>,<speed>,<maxDuration>
+
+			if (plannedCartMovement != STOP) {
+				prtl("ignoring new rotate command while in move");
+				return;
+			}
+
 			strtokIndx = strtok(msgCopyForParsing, ","); // msgId, "3"
 
 			strtokIndx = strtok(NULL, ","); // angle
@@ -185,7 +205,7 @@ void checkCommand() {
 			setPlannedCartMove(ROTATE_CLOCKWISE, thisRequestedMaxSpeed, 0, thisRequestedRelAngle, thisMaxMoveDuration, true);
 
 			break;
-
+		}
 
 		case '4':  // stop
 			stopCart(true, "stop requested by cartControl");
@@ -214,7 +234,12 @@ void checkCommand() {
 			Serial.println();
 			break;
 
-		case '7':  // test IR sensor
+		case '7': { // test IR sensor
+
+			if (plannedCartMovement != STOP) {
+				prtl("ignoring test sensor command while in move");
+				return;
+			}
 
 			strtokIndx = strtok(msgCopyForParsing, ","); // msgId, "7"
 
@@ -236,7 +261,7 @@ void checkCommand() {
 			setPlannedCartMove(cartDirection, 0, 0, 2000, testDuration, true);
 
 			break;
-
+		}
 
 		case '8':  // move table 8,<height>
 
@@ -318,7 +343,7 @@ void checkCommand() {
 			break;
 
 
-		case 'd':	// speed adjustments for all motors in percent in order fr,fl,br,bl
+		case 'c':	// speed adjustments for all motors in percent in order fr,fl,br,bl
 			
 			strtokIndx = strtok(msgCopyForParsing, ","); // msgId, "d"
 			
@@ -328,7 +353,7 @@ void checkCommand() {
 				_speedUnifyer[i] = speedPercentage;
 			}
 
-			Serial.print(F("msg d: motor speed unifyers (fr,fl,br,bl): "));
+			Serial.print(F("msg c: motor speed unifyers (fr,fl,br,bl): "));
 			for (int i = 0; i < MOTORS_COUNT; i++) {
 				Serial.print(_speedUnifyer[i]);
 				Serial.print(",");
@@ -338,10 +363,10 @@ void checkCommand() {
 			break;
 
 
-		case 'e':	// all configuration data received
+		case 'd':	// all configuration data received
 			// this enables setup to continue
 			configurationComplete = true;
-			Serial.println(F("msg e: configuration data complete"));
+			Serial.println(F("msg d: configuration data complete"));
 
 			break;
 

@@ -72,11 +72,11 @@ int sumDonePartialDistances;			// distance in previous partial moves
 int partialMoveDistance;				// distance in current partial move
 int remainingMoveDistance;
 
-int requestedMoveAngle;					// rel angle
-int partialMoveStartAngle;				// abs angle
-int partialMoveAngle;					// rel angle rotated in current partial move
-int sumDonePartialAngles;				// rel angle rotated in previous partial moves
-int remainingMoveAngle;					// rel angle to target
+int requestedRotateAngle;					// rel angle
+int partialRotateStartAngle;				// abs angle
+int partialRotateAngle;					// rel angle rotated in current partial move
+int sumDonePartialRotateAngles;				// rel angle rotated in previous partial moves
+int remainingRotateAngle;					// rel angle to target
 
 int maxMoveMillis;						// max allowed duration for move (when speed > 0)
 int partialMoveMillis;					// millis in current partial move
@@ -95,7 +95,7 @@ bool newSensorValuesAvailable;
 
 // cart moves can be non-straight when wheel speed differences or slides occur
 // try to adjust the wheel speeds to get a straight move (platform imu will show drifts)
-int imuYawStart = platformImu.getYaw();			// for rotation end and drift detection/correction during move
+int rotateStartAngle = platformImu.getYaw();			// for rotation end and drift detection/correction during move
 int prevDriftCheckDistance;
 float driftCompensationLeft = 1.0;
 float driftCompensationRight = 0.95;
@@ -275,36 +275,41 @@ void setPlannedCartMove(MOVEMENT newCartAction, int newMaxSpeed, int newDistance
 	plannedCartMovement = newCartAction;
 	activeCartMovement = STOP;
 	requestedMaxSpeed = newMaxSpeed;
-	requestedMoveDistance = newDistance;
-	requestedMoveAngle = relAngle;
-	maxMoveMillis = newDuration;
 	moveProtected = newMoveProtected;
-	blockedMoveMillis = millis();
-	freeMove = false;
 	
-	partialMoveStartMillis = 0;
+	requestedMoveDistance = newDistance;
 	sumDonePartialDistances = 0;
 	partialMoveDistance = 0;
-	sumDonePartialAngles = 0;
-	partialMoveAngle = 0;
+	remainingMoveDistance = requestedMoveDistance;
+
+	requestedRotateAngle = relAngle;
+	rotateStartAngle = platformImu.getYaw();		// for rotation and drift detection/correction
+	partialRotateStartAngle = rotateStartAngle;
+	sumDonePartialRotateAngles = 0;
+	partialRotateAngle = 0;
+	remainingRotateAngle = requestedRotateAngle;
+
+	maxMoveMillis = newDuration;
+	partialMoveStartMillis = 0;
 	sumDonePartialMoveMillis = 0;
 	partialMoveMillis = 0;
-	remainingMoveDistance = requestedMoveDistance;
-	remainingMoveAngle = requestedMoveAngle;
 	remainingMoveMillis = maxMoveMillis;
 
-	imuYawStart = platformImu.getYaw();		// for rotation and drift detection/correction
+	blockedMoveMillis = millis();
+	freeMove = false;
+
 	prevDriftCheckDistance = 0;
 	driftCompensationLeft = 1.0;
 	driftCompensationRight = 0.95;
 
-	Serial.print(F("plannedCartMove: ")); 
-	Serial.print(plannedCartMovement); Serial.print("-"); Serial.print(MOVEMENT_NAMES[plannedCartMovement]);
-	Serial.print(F(", speed: ")); Serial.print(requestedMaxSpeed);
-	Serial.print(F(", dist: ")); Serial.print(requestedMoveDistance);
-	Serial.print(F(" mm, maxMoveDuration: ")); Serial.print(maxMoveMillis);
-	Serial.print(F(" ms, moveProtected: ")); Serial.print(moveProtected ? "true" : "false");
-	Serial.println();
+	prt("plannedCartMove: "); 
+	pr(plannedCartMovement); pr("-"); pr(MOVEMENT_NAMES[plannedCartMovement]);
+	prt(", speed: "); pr(requestedMaxSpeed);
+	prt(", dist: "); pr(requestedMoveDistance);
+	prt(", angle: "); pr(requestedRotateAngle);
+	prt(" mm, maxMoveDuration: "); pr(maxMoveMillis);
+	prt(" ms, moveProtected: "); pr(moveProtected ? "true" : "false");
+	prl();
 
 	setInvolvedIrSensors(newCartAction, moveProtected);
 	swipeStepStartMillis = millis();
@@ -404,7 +409,7 @@ void updateDistanceAngleMillisMoved() {
 		partialMoveMillis = millis() - partialMoveStartMillis;
 		remainingMoveMillis = maxMoveMillis - sumDonePartialMoveMillis - partialMoveMillis;
 
-		pr(millis() - moveRequestReceivedMillis);
+		pr(millis() - moveRequestReceivedMillis); pr(" ms, ");
 		prt("updateDist.. partialMoveMillis: "); pr(partialMoveMillis);
 		prt(", sumDonePartialMoveMillis: "); pr(sumDonePartialMoveMillis);
 		prl();
@@ -415,51 +420,56 @@ void updateDistanceAngleMillisMoved() {
 	encoderCounts = wheelPulseCounter;
 	interrupts();
 
-	if ((activeCartMovement == FORWARD) ||
-		(activeCartMovement == BACKWARD)) {
-		partialMoveDistance = int(encoderCounts / PULS_PER_MM_STRAIGHT);
+	// problem with BACKWARD and FOR_DIAG_RIGHT, use FORWARD,BACKWARD as default
+	partialMoveDistance = int(encoderCounts / PULS_PER_MM_STRAIGHT);
+
+	// calc dist based on direction of move
+	switch (activeCartMovement) {
+
+		case FOR_DIAG_RIGHT:
+		case FOR_DIAG_LEFT:
+		case BACK_DIAG_RIGHT:
+		case BACK_DIAG_LEFT:
+			partialMoveDistance = int(encoderCounts / PULS_PER_MM_DIAGONAL);
+			prt("dist corr for diag direction: "); pr(MOVEMENT_NAMES[activeCartMovement]); prl();
+			break;
+
+		case LEFT:
+		case RIGHT:
+			partialMoveDistance = int(encoderCounts / PULS_PER_MM_SIDEWAYS);
+			prt("dist corr for left/right direction: "); pr(MOVEMENT_NAMES[activeCartMovement]); prl();
+			break;
 	}
 
-	// ... and calc dist based on direction of move
-	else if ((activeCartMovement == LEFT) ||
-		(activeCartMovement == RIGHT)) {
-		partialMoveDistance = int(encoderCounts / PULS_PER_MM_SIDEWAYS);
-	}
-
-	else if ((activeCartMovement == BACK_DIAG_LEFT) ||
-		(activeCartMovement == BACK_DIAG_RIGHT) ||
-		(activeCartMovement == FOR_DIAG_LEFT) ||
-		(activeCartMovement == FOR_DIAG_RIGHT)) {
-		partialMoveDistance = int(encoderCounts / PULS_PER_MM_DIAGONAL);
-	}
 	remainingMoveDistance = requestedMoveDistance - sumDonePartialDistances - partialMoveDistance;
 
 	if (verbose && moveType == STRAIGHT) {
-		pr(millis() - moveRequestReceivedMillis);
-		prt("STRAIGHT, requested dist: "); pr(requestedMoveDistance);
-		prt(", partial dist moved: "); pr(partialMoveDistance);
-		prt(", total dist moved: "); pr(sumDonePartialDistances + partialMoveDistance);		
+		pr(millis() - moveRequestReceivedMillis); pr(" ms, ");
+		pr(MOVEMENT_NAMES[activeCartMovement]); 
+		prt(", dist req: "); pr(requestedMoveDistance);
+		prt(", partial: "); pr(partialMoveDistance);
+		prt(", total: "); pr(sumDonePartialDistances + partialMoveDistance);		
 		prt(", encoder counts: ");	pr(encoderCounts);
 		prt(", remain.dist: "); pr(remainingMoveDistance);
 		prl();
 	}
 
 	// for angle use the platform imu and calc abs angle difference
-	partialMoveAngle = absAngleDiff(partialMoveStartAngle, platformImu.getYaw());
-	remainingMoveAngle = requestedMoveAngle - sumDonePartialAngles - partialMoveAngle;
+	partialRotateAngle = absAngleDiff(partialRotateStartAngle, platformImu.getYaw());
+	remainingRotateAngle = requestedRotateAngle - sumDonePartialRotateAngles - partialRotateAngle;
 
 	if (verbose && moveType == ROTATE) {
-		prt("ROTATE, requestedMoveAngle: "); pr(requestedMoveAngle);
-		prt(", partial move angle: "); pr(partialMoveAngle);		
-		prt(", total move angle: "); pr(sumDonePartialAngles + partialMoveAngle);
+		prt("ROTATE, requestedMoveAngle: "); pr(requestedRotateAngle);
+		prt(", partial move angle: "); pr(partialRotateAngle);		
+		prt(", total move angle: "); pr(sumDonePartialRotateAngles + partialRotateAngle);
 		prt(", yaw: "); pr(platformImu.getYaw());
-		prt(", remain.angle: "); pr(remainingMoveAngle);
+		prt(", remain.angle: "); pr(remainingRotateAngle);
 		prl();
 	}
 
 	if (speedPhase == ACCELERATE) {
 		accelerationDistance = partialMoveDistance;
-		accelerationAngle = partialMoveAngle;
+		accelerationAngle = partialRotateAngle;
 		accelerationMillis = millis() - partialMoveStartMillis;
 	}
 }
@@ -597,6 +607,12 @@ bool freeMoveAvailable(MOVEMENT moveDirection) {
 
 void stopCart(bool moveDone, String reason) {
 
+	activeCartMovement = STOP;
+	if (moveDone) {
+		plannedCartMovement = STOP;
+	}
+	moveStatus = STOPPED;
+
 	if (verbose) {
 		pr(millis() - moveRequestReceivedMillis); pr(" ms, ");
 		prt("stopCart, moveDone: "); pr(moveDone);
@@ -612,16 +628,13 @@ void stopCart(bool moveDone, String reason) {
 
 		sumDonePartialDistances += partialMoveDistance;
 		partialMoveDistance = 0;
-		sumDonePartialAngles += partialMoveAngle;
-		partialMoveAngle = 0;
+		sumDonePartialRotateAngles += partialRotateAngle;
+		partialRotateAngle = 0;
 		sumDonePartialMoveMillis += partialMoveMillis;
 		partialMoveMillis = 0;
 		blockedMoveMillis = millis();
 
 	}
-
-	activeCartMovement = STOP;
-	moveStatus = STOPPED;
 
 	if (moveDone) {
 
@@ -669,27 +682,27 @@ void handleDrift() {
 			// check for full circle crossing
 			int offsetImu = 0;
 			int offsetStart = 0;
-			if (platformImu.getYaw() - imuYawStart > 180) {
+			if (platformImu.getYaw() - rotateStartAngle > 180) {
 				offsetStart = 360;
 			}
-			if (platformImu.getYaw() - imuYawStart < -180) {
+			if (platformImu.getYaw() - rotateStartAngle < -180) {
 				offsetImu = 360;
 			}
-			if (((platformImu.getYaw() + offsetImu) - (imuYawStart + offsetStart)) > 0) {
+			if (((platformImu.getYaw() + offsetImu) - (rotateStartAngle + offsetStart)) > 0) {
 				// drift to the left (anticlock), reduce right motors speed
 				if (driftCompensationRight > 0.8) {
 					driftCompensationRight *= 0.97;
 					driftCompensationLeft = 1.0;
 				}
 			}
-			if (((platformImu.getYaw() + offsetImu) - (imuYawStart + offsetStart)) < 0) {
+			if (((platformImu.getYaw() + offsetImu) - (rotateStartAngle + offsetStart)) < 0) {
 				// drift to the left (anticlock), reduce right motors speed
 				if (driftCompensationLeft > 0.8) {
 					driftCompensationLeft *= 0.97;
 					driftCompensationRight = 1.0;
 				}
 			}
-			if (platformImu.getYaw() == imuYawStart) {
+			if (platformImu.getYaw() == rotateStartAngle) {
 				driftCompensationLeft = 1.0;
 				driftCompensationRight = 0.95;
 			}
@@ -700,7 +713,7 @@ void handleDrift() {
 				Serial.print(F("cart position update, distance: "));
 				Serial.print(partialMoveDistance);
 				Serial.print(F(", startYaw: "));
-				Serial.print(imuYawStart);
+				Serial.print(rotateStartAngle);
 				Serial.print(F(", imuYaw: "));
 				Serial.print(platformImu.getYaw());
 				Serial.print(F(", speedLeft: "));
@@ -717,8 +730,8 @@ void handleDrift() {
 // proceed in driving in one of the directions
 void handleMove(bool newSensorValuesAvailable) {
 
-	pr(millis() - moveRequestReceivedMillis); pr(" ms, ");
-	prtl("handleMove");
+	//pr(millis() - moveRequestReceivedMillis); pr(" ms, ");
+	//prtl("handleMove");
 
 	// check for sensor test, do not move in sensor test mode
 	if (moveType == SENSORTEST) return;
@@ -728,25 +741,23 @@ void handleMove(bool newSensorValuesAvailable) {
 		if ((requestedMoveDistance - sumDonePartialDistances - partialMoveDistance) < 5) {
 			stopCart(true, "requested distance moved");
 
-			prt("stop move, imuYawStart: "); pr(imuYawStart);
+			prt("stop move, imuYawStart: "); pr(rotateStartAngle);
 			prt(", requested distance: ");	pr(requestedMoveDistance);
 			prt(", distance moved: ");	pr(sumDonePartialDistances + partialMoveDistance);
 			prt(", imuYawEnd: "); pr(platformImu.getYaw());
 			prl();
-
 			return;
 		}
 	}
 	else if (moveType = ROTATE) {
-		if (requestedMoveAngle - sumDonePartialAngles - partialMoveAngle < 1) {
+		if (requestedRotateAngle - sumDonePartialRotateAngles - partialRotateAngle < 1) {
 			stopCart(true, "requested rotation done");
 
-			prt("stop rotation, imuYawStart: "); pr(imuYawStart);
-			prt(", requested angle: ");	pr(requestedMoveAngle);
-			prt(", angle rotated: ");	pr(sumDonePartialAngles + partialMoveAngle);
+			prt("stop rotation, imuYawStart: "); pr(rotateStartAngle);
+			prt(", requested angle: ");	pr(requestedRotateAngle);
+			prt(", angle rotated: ");	pr(sumDonePartialRotateAngles + partialRotateAngle);
 			prt(", imuYawEnd: "); pr(platformImu.getYaw());
 			prl();
-
 			return;
 		}
 	}
@@ -783,6 +794,7 @@ void handleMove(bool newSensorValuesAvailable) {
 
 			if (verbose) {
 				prt("move, cartSpeed: "); pr(cartSpeed);
+				prt(", activeCartMovement: "); pr(MOVEMENT_NAMES[activeCartMovement]);
 				prtl(", speedPhase ACCELERATE set");
 			}
 		}
@@ -793,11 +805,11 @@ void handleMove(bool newSensorValuesAvailable) {
 
 			// keep track of acceleration distance and time to be used in deceleration
 			accelerationDistance = partialMoveDistance;
-			accelerationAngle = partialMoveAngle;
+			accelerationAngle = partialRotateAngle;
 			accelerationMillis = millis() - partialMoveStartMillis;
 
 			// increase speed if we have remaining distance and remaining time
-			prt("remaining move distance/angle: "); pr(remainingMoveDistance); pr(" / "); pr(remainingMoveAngle);
+			prt("remaining move distance/angle: "); pr(remainingMoveDistance); pr(" / "); pr(remainingRotateAngle);
 			prt(", remaining move millis: "); pr(remainingMoveMillis);
 			prl();
 
@@ -805,7 +817,7 @@ void handleMove(bool newSensorValuesAvailable) {
 				(remainingMoveMillis > 500)) {
 
 				if ((moveType == STRAIGHT && remainingMoveDistance > 60) ||
-					(moveType == ROTATE && remainingMoveAngle > 5)) {
+					(moveType == ROTATE && remainingRotateAngle > 5)) {
 					cartSpeed += MAX_SPEED_INCREASE;
 				}
 			}
@@ -826,9 +838,9 @@ void handleMove(bool newSensorValuesAvailable) {
 
 		if (verbose && moveType == ROTATE) {
 			pr(millis() - moveRequestReceivedMillis); pr(" ms, ");
-			prt("handleMove, angle requested: "); pr(requestedMoveAngle);
-			prt(", moved: "); pr(sumDonePartialAngles + partialMoveAngle);
-			prt(", remaining: "); pr(remainingMoveAngle);
+			prt("handleMove, angle requested: "); pr(requestedRotateAngle);
+			prt(", moved: "); pr(sumDonePartialRotateAngles + partialRotateAngle);
+			prt(", remaining: "); pr(remainingRotateAngle);
 			prt(", accelerate: "); pr(accelerationAngle);
 			prl();
 		}
@@ -836,8 +848,8 @@ void handleMove(bool newSensorValuesAvailable) {
 		// check decelerate conditions in move:
 		if ((remainingMoveMillis < accelerationMillis) ||
 			(remainingMoveMillis < 500) ||
-			(moveType == STRAIGHT && remainingMoveDistance < accelerationDistance) ||
-			(moveType == ROTATE && remainingMoveAngle < accelerationAngle) )
+			(moveType == STRAIGHT && remainingMoveDistance < 1.3 * accelerationDistance) ||
+			(moveType == ROTATE && remainingRotateAngle < accelerationAngle) )
 			{
 			if (speedPhase != DECELERATE) {
 				speedPhase = DECELERATE;
@@ -849,7 +861,7 @@ void handleMove(bool newSensorValuesAvailable) {
 						prt(", accel.dist: "); pr(accelerationDistance);
 					} 
 					if (moveType == ROTATE) {
-						prt(", rem.angle:"); pr(remainingMoveAngle);					
+						prt(", rem.angle:"); pr(remainingRotateAngle);					
 						prt(", accel.angle: "); pr(accelerationAngle);
 					}
 					prt(", rem.millis: "); pr(remainingMoveMillis);
@@ -869,7 +881,7 @@ void handleMove(bool newSensorValuesAvailable) {
 			}
 			if (verbose) {
 				prt("decelerate remaining distance: "); pr(remainingMoveDistance);
-				prt(", remaining angle: "); pr(remainingMoveAngle);
+				prt(", remaining angle: "); pr(remainingRotateAngle);
 				prt(", cartSpeed: "); pr(cartSpeed);
 				prl();
 			}
@@ -917,8 +929,7 @@ void handleCartMovement() {
 					return;
 				}
 			}
-		}			
-
+		}
 
 		// check continuation time after obstacle or abyss detection
 		if (cartSpeed == 0) {
