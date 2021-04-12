@@ -1,6 +1,3 @@
 # cartControlArduino
 
-
-@startuml
-actor User
-@enduml
+Arduino code to control cart hardware. Used by InMoov/cartControl
