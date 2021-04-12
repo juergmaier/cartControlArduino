@@ -1,7 +1,9 @@
-// 
-// 
-// 
 
+
+char version[10] = "v2.0";
+
+// 
+// 
 
 #include <Adafruit_BNO055.h>
 #include <math.h>
@@ -150,7 +152,7 @@ void setup()
 
 	Serial.begin(115200);
 
-	Serial.println(F("MotorizedBase v1.6"));
+	Serial.print(F("C0 cartControlArduino ")); Serial.println(version);
 
 	// wait for received configuration values
 	unsigned long timeoutWait = millis() + 5000;

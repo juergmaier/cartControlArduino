@@ -3,7 +3,7 @@
 // 
 
 #include "cartControlArduino.h"
-#include "Table.h"
+#include "table.h"
 #include "bno055.h"
 #include "drive.h"
 

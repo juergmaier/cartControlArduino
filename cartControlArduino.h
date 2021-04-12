@@ -3,7 +3,7 @@
 #ifndef _MOTORIZEDBASE_h
 #define _MOTORIZEDBASE_h
 
-#include "arduino.h"
+//#include "arduino.h"
 #include "bno055.h"
 
 // print macros using F() PROGMEM for text strings

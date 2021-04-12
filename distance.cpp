@@ -3,8 +3,8 @@
 // 
 #include "distance.h"
 #include "cartControlArduino.h"
-#include "Drive.h"
-#include "Table.h"
+#include "drive.h"
+#include "table.h"
 
 #include <EEPROM.h>
 #include <Servo.h>

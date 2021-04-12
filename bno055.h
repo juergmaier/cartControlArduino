@@ -3,7 +3,7 @@
 #ifndef _bno055_h
 #define _bno055_h
 
-#include "arduino.h"
+//#include "arduino.h"
 #include <Adafruit_BNO055.h>
 
 class Imu {

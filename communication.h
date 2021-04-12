@@ -3,7 +3,7 @@
 #ifndef _COMMUNICATION_h
 #define _COMMUNICATION_h
 
-#include "arduino.h"
+//#include "arduino.h"
 
 #include "cartControlArduino.h"
 #include "bno055.h"

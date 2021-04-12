@@ -3,7 +3,7 @@
 #ifndef _FAHREN_h
 #define _FAHREN_h
 
-#include "arduino.h"
+//#include "arduino.h"
 #include "distance.h"
 
 //given by cartControl with message 0
